@@ -24,13 +24,14 @@ export default async function TalkPage({
   // rows the caller can see, so a non-member's memberRows fetch comes back
   // empty and "friend" ends up undefined below — same 404 outcome, one
   // fewer round trip.
-  const [{ data: memberRowsRaw }, { data: messages }] = await Promise.all([
+  const [{ data: memberRowsRaw }, { data: messages }, { data: settings }] = await Promise.all([
     supabase.from("room_members").select("profile:profiles(*)").eq("room_id", roomId),
     supabase
       .from("messages")
       .select("*, sender:profiles(*)")
       .eq("room_id", roomId)
       .order("created_at", { ascending: true }),
+    supabase.from("settings").select("ttl_hours").eq("id", true).single(),
   ]);
   const memberRows = memberRowsRaw as unknown as Array<{ profile: Profile | null }> | null;
 
@@ -48,6 +49,7 @@ export default async function TalkPage({
       friend={friend}
       members={members}
       initialMessages={(messages as unknown as MessageWithSender[]) ?? []}
+      ttlHours={settings?.ttl_hours ?? 24}
     />
   );
 }

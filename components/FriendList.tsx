@@ -58,7 +58,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="bg-[#06C755] px-4 py-3 text-white">
+      <header className="border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950">
         <h1 className="text-lg font-semibold">トーク</h1>
       </header>
 

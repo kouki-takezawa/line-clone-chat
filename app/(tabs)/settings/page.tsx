@@ -22,5 +22,7 @@ export default async function SettingsPage() {
 
   if (!profile?.is_admin) redirect("/chat");
 
-  return <SettingsPanel currentUserId={user.id} />;
+  const { data: settings } = await supabase.from("settings").select("ttl_hours").eq("id", true).single();
+
+  return <SettingsPanel currentUserId={user.id} initialTtlHours={settings?.ttl_hours ?? 24} />;
 }

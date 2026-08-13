@@ -17,7 +17,7 @@ export default function MessageList({ messages, currentUserId }: Props) {
   }, [messages.length]);
 
   return (
-    <div className="flex-1 space-y-2 overflow-y-auto p-4">
+    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-neutral-100 p-4 dark:bg-neutral-900">
       {messages.length === 0 && (
         <p className="mt-8 text-center text-sm text-black/40 dark:text-white/40">
           まだメッセージはありません

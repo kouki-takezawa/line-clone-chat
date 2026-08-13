@@ -1,69 +1,51 @@
 # セットアップ手順
 
+実際にデプロイした構成に合わせた手順です（当初案から一部変更しています：メール認証ではなくログインID方式、プッシュ通知は未実装、24時間TTLの実行はEdge Functionではなくpg_cron+SQL関数）。
+
 ## 1. Supabaseプロジェクト作成
 
-1. https://supabase.com でプロジェクトを新規作成（無料枠）。
-2. Project Settings → API から `Project URL` と `anon public key` を控える。
-3. Project Settings → API → `service_role key` を控える（**絶対に公開しない**）。
+1. https://supabase.com でプロジェクトを新規作成（無料枠、リージョンはTokyo推奨）。
+2. Project Settings → API から `Project URL`・`anon public key`・`service_role key` を控える（service_role keyは絶対に公開しない）。
+3. Project Settings → Database から接続文字列（Session Pooler推奨、`aws-0-<region>.pooler.supabase.com:6543`、ユーザー名`postgres.<project-ref>`）とデータベースパスワードを控える。
 
-## 2. Supabase CLIでリンク & マイグレーション適用
+## 2. マイグレーション適用（Supabase CLIなし、直接Postgres接続）
+
+Supabase CLIのログインはブラウザ認証が必要で非対話環境では使えないため、`supabase/migrations/*.sql` を直接Postgres接続で順番に適用する（`pg` パッケージ等でNode script化すると楽）。0001〜0009まで全て適用すること。
+
+## 3. 管理者アカウントのbootstrap
+
+Supabase Auth Admin API（service_role key使用）で最初の管理者アカウントを作成する:
 
 ```bash
-npx supabase login
-npx supabase link --project-ref <project-ref>
-npx supabase db push
+curl -X POST "https://<project-ref>.supabase.co/auth/v1/admin/users" \
+  -H "apikey: <service-role-key>" \
+  -H "Authorization: Bearer <service-role-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "<好きなログインID>@login.internal",
+    "password": "<初期パスワード（6文字以上）>",
+    "email_confirm": true,
+    "user_metadata": { "login_id": "<好きなログインID>", "display_name": "管理者", "is_admin": true }
+  }'
 ```
 
-これで `supabase/migrations/*.sql` が全て適用され、テーブル・RLS・Storageバケット・Realtimeが有効になります。
+以降の友達アカウントは、このアカウントでログイン後、設定画面から追加できる（最大5人）。
 
-## 3. Auth設定
+## 4. 24時間TTL purgeの有効化（Vault secret設定）
 
-1. Dashboard → Authentication → Settings → **「Allow new users to sign up」をOFF**にする。
-2. Authentication → Users → **Add user** で、参加者（最大3人）分のアカウントをメール+仮パスワードで作成する。
-
-## 4. ルームとメンバーをSeed
-
-SQL Editorで以下を実行（`<user-id-1>`等は作成したユーザーのUUID。Authentication → Usersの一覧から確認できます）:
+`purge_expired_messages()`（migration 0009）はStorage画像削除にservice_role keyを使うが、そのキー自体はマイグレーションファイルにはコミットされていない（git管理外）。SQL Editorで一度だけ実行する:
 
 ```sql
-insert into public.rooms (id, name) values (gen_random_uuid(), 'Family Chat') returning id;
--- 上のクエリで返ってきたidを使って:
-insert into public.room_members (room_id, user_id) values
-  ('<room-id>', '<user-id-1>'),
-  ('<room-id>', '<user-id-2>'),
-  ('<room-id>', '<user-id-3>');
+select vault.create_secret('<service-role-key>', 'service_role_key', 'Used by purge_expired_messages()');
 ```
 
-## 5. VAPIDキー生成（プッシュ通知用）
+これで `pg_cron` が15分ごとに `purge_expired_messages()` を実行し、設定画面で指定したTTL（デフォルト24時間）を過ぎたメッセージと画像を自動削除する。
 
-```bash
-npx web-push generate-vapid-keys
-```
+## 5. Auth設定
 
-出力された Public Key / Private Key を控える。
+Dashboard → Authentication → Settings → **「Allow new users to sign up」をOFF**にする（ログインID方式のため実質的に第三者は登録できないが、念のため）。
 
-## 6. Edge Functionsのデプロイとsecrets設定
-
-```bash
-npx supabase functions deploy purge-expired --no-verify-jwt
-npx supabase functions deploy send-push --no-verify-jwt
-
-npx supabase secrets set \
-  SUPABASE_URL=https://<project-ref>.supabase.co \
-  SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
-  FUNCTION_SECRET=<好きなランダム文字列> \
-  VAPID_SUBJECT=mailto:<自分のメールアドレス> \
-  VAPID_PUBLIC_KEY=<上で生成したPublic Key> \
-  VAPID_PRIVATE_KEY=<上で生成したPrivate Key>
-```
-
-## 7. cronとWebhookトリガーの設定
-
-`supabase/post_deploy.sql` を開き、`<PROJECT_REF>` と `<FUNCTION_SECRET>`（手順6と同じ値）を置換してから、SQL Editorで実行する。これで:
-- `purge-expired` が15分ごとに自動実行される（24時間TTL）
-- メッセージが送信されるたびに `send-push` が自動的に呼ばれる
-
-## 8. ローカル環境変数
+## 6. ローカル環境変数
 
 `.env.local.example` を `.env.local` にコピーし、値を埋める:
 
@@ -72,34 +54,24 @@ cp .env.local.example .env.local
 ```
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`: 手順1で控えた値
-- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: 手順5で生成したPublic Key
+- `SUPABASE_SERVICE_ROLE_KEY`: 手順1で控えたservice_role key（サーバー専用、`/api/admin/*` が使用。クライアントには公開されない）
 
-## 9. ローカルで動作確認
+## 7. Vercelへデプロイ
 
-```bash
-npm run dev
-```
+GitHubリポジトリをVercelにImportし、上記3つの環境変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）をProject Settings → Environment Variablesに設定してDeploy。以降は`main`にpushするたび自動デプロイされる。
 
-2つの別ブラウザ（通常+シークレットウィンドウなど）で、手順3で作った別々のアカウントでログインし、テキスト・画像の送受信、通知トグルの動作を確認する。
+## 未実装（保留中）
 
-## 10. Vercelへデプロイ
+- プッシュ通知（VAPID・Supabase Edge Function `send-push`・Database Webhook）。実装済みのUI（通知ON/OFFトグル）はあるが、実際の通知送信は未接続。
+- `supabase/functions/purge-expired`（Edge Function版のTTL purge）は未使用。実際に動いているのはmigration 0009のSQL関数+pg_cron版。
 
-```bash
-npx vercel link
-npx vercel env add NEXT_PUBLIC_SUPABASE_URL
-npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
-npx vercel env add NEXT_PUBLIC_VAPID_PUBLIC_KEY
-npx vercel --prod
-```
+## 動作確認: TTL自動削除
 
-デプロイ後のURLと、手順3で発行した各自のログイン情報を、参加者にLINE等で個別に伝える。
-
-## 24時間TTLの動作確認
-
-SQL Editorで特定メッセージを25時間前に見せかける:
+SQL Editorで特定メッセージを未来のTTLより古く見せかける:
 
 ```sql
-update messages set created_at = now() - interval '25 hours' where id = '<message-id>';
+update messages set created_at = now() - (select ttl_hours from settings where id = true) * interval '1 hour' - interval '1 minute' where id = '<message-id>';
+select purge_expired_messages(); -- 手動実行、または最大15分待つ
 ```
 
-最大15分待つ（または `npx supabase functions invoke purge-expired` で手動実行）と、そのメッセージがDBからもStorageからも削除され、開いている画面からもリアルタイムに消えることを確認する。
+削除後、そのメッセージがDB・Storageの両方から消え、開いている画面からもリアルタイムに消えることを確認する。

@@ -23,15 +23,26 @@ export default async function HomePage() {
   }> | null;
 
   const friends = new Map<string, { roomId: string; friend: Profile }>();
+  let me: Profile | null = null;
   for (const row of allMembers ?? []) {
-    if (row.user_id !== user.id && row.profile) {
+    if (row.user_id === user.id && row.profile) {
+      me = row.profile;
+    } else if (row.profile) {
       friends.set(row.profile.id, { roomId: row.room_id, friend: row.profile });
     }
   }
+
+  // A user with no rooms yet (fresh account, no friends added) won't appear
+  // in room_members at all — fall back to fetching their profile directly.
+  if (!me) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    me = data;
+  }
+  if (!me) redirect("/login");
 
   const list = [...friends.values()].sort((a, b) =>
     a.friend.display_name.localeCompare(b.friend.display_name, "ja"),
   );
 
-  return <HomeFriendList friends={list} />;
+  return <HomeFriendList me={me} friends={list} />;
 }

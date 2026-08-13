@@ -9,7 +9,7 @@ export default function BottomTabBar({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   const tabs: Tab[] = [
-    { href: "/home", label: "ホーム", icon: "🏠" },
+    { href: "/home", label: "友達一覧", icon: "👥" },
     { href: "/chat", label: "トーク", icon: "💬" },
     ...(isAdmin ? [{ href: "/settings", label: "設定", icon: "⚙️" }] : []),
   ];

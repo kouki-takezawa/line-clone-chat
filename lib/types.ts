@@ -41,6 +41,11 @@ export type PushSubscriptionRow = {
   created_at: string;
 };
 
+export type Settings = {
+  id: boolean;
+  ttl_hours: number;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -77,6 +82,12 @@ export type Database = {
           auth: string;
         };
         Update: Partial<PushSubscriptionRow>;
+        Relationships: [];
+      };
+      settings: {
+        Row: Settings;
+        Insert: Partial<Settings>;
+        Update: Partial<Settings>;
         Relationships: [];
       };
     };

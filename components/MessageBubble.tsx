@@ -45,8 +45,8 @@ export default function MessageBubble({ message, isOwn }: Props) {
         <div
           className={`rounded-2xl px-3 py-2 ${
             isOwn
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "bg-black/5 dark:bg-white/10"
+              ? "bg-[#06C755] text-white"
+              : "bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white"
           }`}
         >
           {message.image_path && (

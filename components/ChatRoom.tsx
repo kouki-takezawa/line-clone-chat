@@ -14,6 +14,7 @@ type Props = {
   friend: Profile;
   initialMessages: MessageWithSender[];
   members: Profile[];
+  ttlHours: number;
 };
 
 export default function ChatRoom({
@@ -22,6 +23,7 @@ export default function ChatRoom({
   friend,
   initialMessages,
   members,
+  ttlHours,
 }: Props) {
   const [messages, setMessages] = useState<MessageWithSender[]>(initialMessages);
   const membersRef = useRef(members);
@@ -77,11 +79,11 @@ export default function ChatRoom({
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex items-center gap-3 bg-[#06C755] px-2 py-3 text-white">
+      <header className="flex items-center gap-3 border-b border-black/10 bg-white px-2 py-3 dark:border-white/10 dark:bg-neutral-950">
         <Link
           href="/chat"
           aria-label="トーク一覧に戻る"
-          className="rounded-full p-2 text-xl leading-none active:bg-white/15"
+          className="rounded-full p-2 text-xl leading-none text-black active:bg-black/5 dark:text-white dark:active:bg-white/10"
         >
           ←
         </Link>
@@ -96,7 +98,7 @@ export default function ChatRoom({
       <MessageList messages={messages} currentUserId={currentUserId} />
 
       <p className="bg-white px-3 pt-1 text-center text-[11px] text-black/35 dark:bg-neutral-950 dark:text-white/35">
-        メッセージは送信から24時間で自動的に削除されます
+        メッセージは送信から{ttlHours}時間で自動的に削除されます
       </p>
 
       <Composer roomId={roomId} currentUserId={currentUserId} />

@@ -17,11 +17,20 @@ type Draft = { loginId: string; password: string; displayName: string };
 
 const emptyDraft: Draft = { loginId: "", password: "", displayName: "" };
 const MAX_FRIENDS = 5;
+const TTL_OPTIONS = Array.from({ length: 24 }, (_, i) => i + 1); // 1h〜24h
 
-export default function SettingsPanel({ currentUserId }: { currentUserId: string }) {
+type Props = {
+  currentUserId: string;
+  initialTtlHours: number;
+};
+
+export default function SettingsPanel({ currentUserId, initialTtlHours }: Props) {
   const router = useRouter();
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [ttlHours, setTtlHours] = useState(initialTtlHours);
+  const [ttlSaving, setTtlSaving] = useState(false);
 
   const [selfDraft, setSelfDraft] = useState<Draft>(emptyDraft);
   const [selfSaving, setSelfSaving] = useState(false);
@@ -158,9 +167,22 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
     router.replace("/login");
   }
 
+  async function saveTtl(hours: number) {
+    setTtlHours(hours);
+    setTtlSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("settings")
+      .update({ ttl_hours: hours })
+      .eq("id", true);
+    setTtlSaving(false);
+    if (updateError) setError(updateError.message);
+  }
+
   return (
     <div className="flex flex-1 flex-col">
-      <header className="bg-[#06C755] px-4 py-3 text-white">
+      <header className="border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950">
         <h1 className="text-lg font-semibold">設定</h1>
       </header>
 
@@ -209,6 +231,25 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">通知</h2>
           <NotificationToggle currentUserId={currentUserId} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">トークの自動削除</h2>
+          <p className="text-xs text-black/50 dark:text-white/50">
+            送信したメッセージ（画像含む）を、指定した時間が経過したら自動的に削除します。
+          </p>
+          <select
+            value={ttlHours}
+            disabled={ttlSaving}
+            onChange={(e) => saveTtl(Number(e.target.value))}
+            className="w-full rounded-lg border border-black/15 px-3 py-2 disabled:opacity-50 dark:border-white/20 dark:bg-neutral-900"
+          >
+            {TTL_OPTIONS.map((h) => (
+              <option key={h} value={h}>
+                {h}時間で削除
+              </option>
+            ))}
+          </select>
         </section>
 
         <section className="space-y-3">
