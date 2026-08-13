@@ -1,6 +1,8 @@
 # セットアップ手順
 
-実際にデプロイした構成に合わせた手順です（当初案から一部変更しています：メール認証ではなくログインID方式、プッシュ通知は未実装、24時間TTLの実行はEdge Functionではなくpg_cron+SQL関数）。
+実際にデプロイした構成に合わせた手順です（プッシュ通知は未実装、24時間TTLの実行はEdge Functionではなくpg_cron+SQL関数）。
+
+認証はメールアドレス＋パスワードによる自己登録方式（誰でも`/signup`から登録可能、上限110アカウント）。以前のログインID・管理者招待方式は廃止済み。
 
 ## 1. Supabaseプロジェクト作成
 
@@ -10,26 +12,13 @@
 
 ## 2. マイグレーション適用（Supabase CLIなし、直接Postgres接続）
 
-Supabase CLIのログインはブラウザ認証が必要で非対話環境では使えないため、`supabase/migrations/*.sql` を直接Postgres接続で順番に適用する（`pg` パッケージ等でNode script化すると楽）。0001〜0009まで全て適用すること。
+Supabase CLIのログインはブラウザ認証が必要で非対話環境では使えないため、`supabase/migrations/*.sql` を直接Postgres接続で順番に適用する（`pg` パッケージ等でNode script化すると楽）。0001〜0012まで全て適用すること。
 
-## 3. 管理者アカウントのbootstrap
+## 3. Auth設定・動作確認
 
-Supabase Auth Admin API（service_role key使用）で最初の管理者アカウントを作成する:
+Dashboard → Authentication → Settings → 「**Allow new users to sign up**」がONになっていることを確認する（誰でも登録できるオープンなアプリのため）。
 
-```bash
-curl -X POST "https://<project-ref>.supabase.co/auth/v1/admin/users" \
-  -H "apikey: <service-role-key>" \
-  -H "Authorization: Bearer <service-role-key>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "<好きなログインID>@login.internal",
-    "password": "<初期パスワード（6文字以上）>",
-    "email_confirm": true,
-    "user_metadata": { "login_id": "<好きなログインID>", "display_name": "管理者", "is_admin": true }
-  }'
-```
-
-以降の友達アカウントは、このアカウントでログイン後、設定画面から追加できる（最大5人）。
+無料枠のSupabase組み込みメール送信は送信数がかなり少なく、動作確認中もすぐレート制限にかかる。100人規模の登録・パスワードリセットメールを問題なく捌くには、Dashboard → Authentication → SMTP Settings で**カスタムSMTP（例: Resendの無料枠 月3,000通）の設定を推奨**する。
 
 ## 4. 24時間TTL purgeの有効化（Vault secret設定）
 
@@ -41,11 +30,7 @@ select vault.create_secret('<service-role-key>', 'service_role_key', 'Used by pu
 
 これで `pg_cron` が15分ごとに `purge_expired_messages()` を実行し、設定画面で指定したTTL（デフォルト24時間）を過ぎたメッセージと画像を自動削除する。
 
-## 5. Auth設定
-
-Dashboard → Authentication → Settings → **「Allow new users to sign up」をOFF**にする（ログインID方式のため実質的に第三者は登録できないが、念のため）。
-
-## 6. ローカル環境変数
+## 5. ローカル環境変数
 
 `.env.local.example` を `.env.local` にコピーし、値を埋める:
 
@@ -54,16 +39,18 @@ cp .env.local.example .env.local
 ```
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`: 手順1で控えた値
-- `SUPABASE_SERVICE_ROLE_KEY`: 手順1で控えたservice_role key（サーバー専用、`/api/admin/*` が使用。クライアントには公開されない）
+- `SUPABASE_SERVICE_ROLE_KEY`: 手順1で控えたservice_role key（サーバー専用。`/api/avatar` がアバターアップロード時に使用。クライアントには公開されない）
 
-## 7. Vercelへデプロイ
+## 6. Vercelへデプロイ
 
 GitHubリポジトリをVercelにImportし、上記3つの環境変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）をProject Settings → Environment Variablesに設定してDeploy。以降は`main`にpushするたび自動デプロイされる。
 
 ## 未実装（保留中）
 
-- プッシュ通知（VAPID・Supabase Edge Function `send-push`・Database Webhook）。実装済みのUI（通知ON/OFFトグル）はあるが、実際の通知送信は未接続。
-- `supabase/functions/purge-expired`（Edge Function版のTTL purge）は未使用。実際に動いているのはmigration 0009のSQL関数+pg_cron版。
+- 友達申請・QRコードによる友達追加（フェーズ2で実装予定。現状チャットルームは手動で作成したものしか存在しない）
+- 画像ライトボックス・メッセージ長押しメニュー・絵文字リアクション・入力中インジケーターなどのチャットUX強化（フェーズ3）
+- 既読表示・ミュート・未読バッジ・プッシュ通知の実配信（フェーズ4）。通知ON/OFFトグルのUIはあるが、実際の送信は未接続
+- `supabase/functions/purge-expired`（Edge Function版のTTL purge）は未使用。実際に動いているのはmigration 0009のSQL関数+pg_cron版
 
 ## 動作確認: TTL自動削除
 
@@ -75,3 +62,7 @@ select purge_expired_messages(); -- 手動実行、または最大15分待つ
 ```
 
 削除後、そのメッセージがDB・Storageの両方から消え、開いている画面からもリアルタイムに消えることを確認する。
+
+## 動作確認: 登録上限・レートリミット
+
+登録者数110人到達時の拒否、および1秒3通/1分5枚のレートリミットはDBトリガー（migration 0012）で強制されており、Supabaseの管理画面でService Role KeyのREST API経由で直接インサートを連投することで動作確認できる（通常のUI操作では到達しない領域のため）。
