@@ -3,10 +3,16 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-// Light obfuscation only, not real security: this is a client component, so
-// this value ships inside the browser's JS bundle and is visible to anyone
-// who inspects the page source. Change it to something only you'd type.
-const UNLOCK_PHRASE = "あじさい2026";
+// The unlock phrase is today's date (yyyy/mm/dd), based on the device's own
+// clock. Light obfuscation only, not real security — someone who knows the
+// scheme could still guess it.
+function todaysUnlockPhrase(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}/${mm}/${dd}`;
+}
 
 type Task = { id: string; text: string; done: boolean };
 
@@ -26,7 +32,7 @@ export default function Home() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    if (trimmed === UNLOCK_PHRASE) {
+    if (trimmed === todaysUnlockPhrase()) {
       router.push("/login");
       return;
     }
