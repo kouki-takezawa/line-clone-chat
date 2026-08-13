@@ -15,7 +15,7 @@ export default function BottomTabBar({ isAdmin }: { isAdmin: boolean }) {
   ];
 
   return (
-    <nav className="flex shrink-0 border-t border-black/10 bg-white pb-[env(safe-area-inset-bottom)] dark:border-white/10 dark:bg-neutral-950">
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-white pb-[env(safe-area-inset-bottom)] dark:border-white/10 dark:bg-neutral-950">
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (

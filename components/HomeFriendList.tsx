@@ -37,7 +37,7 @@ export default function HomeFriendList({ me, friends }: Props) {
         <h1 className="text-lg font-semibold">友達一覧</h1>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-20">
         {/* Your own account — tap to edit how your name/icon appear to others. */}
         <div className="border-b border-black/5 dark:border-white/10">
           {editing ? (

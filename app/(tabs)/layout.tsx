@@ -16,8 +16,13 @@ export default async function TabsLayout({ children }: { children: React.ReactNo
     .single();
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    // position: fixed pins this shell to the actual viewport instead of
+    // sizing off document flow (min-h-dvh is only a minimum — if content
+    // ever pushed the page taller, the whole body would scroll and drag
+    // the tab bar down with it). The bottom-14 gap plus each scrollable
+    // area's own bottom padding keep content clear of the fixed tab bar.
+    <div className="fixed inset-0 flex flex-col bg-white dark:bg-neutral-950">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <BottomTabBar isAdmin={profile?.is_admin ?? false} />
     </div>
   );

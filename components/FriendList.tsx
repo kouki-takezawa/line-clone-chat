@@ -67,7 +67,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
           トークがありません。ホームから友達を選んで話しかけてみましょう。
         </p>
       ) : (
-        <ul className="min-h-0 flex-1 divide-y divide-black/5 overflow-y-auto dark:divide-white/10">
+        <ul className="min-h-0 flex-1 divide-y divide-black/5 overflow-y-auto pb-20 dark:divide-white/10">
           {rooms.map((room) => (
             <li key={room.id}>
               <SwipeableRow

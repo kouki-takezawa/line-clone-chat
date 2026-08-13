@@ -32,18 +32,10 @@ export default function ChatRoom({
     membersRef.current = members;
   }, [members]);
 
-  useEffect(() => {
-    // Opening a talk un-hides it from the トーク list, in case it was
-    // previously removed there via the swipe action (which only hides it
-    // for this viewer — it never touched the room or the other person).
-    const supabase = createClient();
-    supabase
-      .from("room_members")
-      .update({ talk_hidden: false })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId)
-      .then(() => {});
-  }, [roomId, currentUserId]);
+  // Note: opening a talk does NOT un-hide it from the トーク list anymore —
+  // only a new message (sent or received) does, via a DB trigger
+  // (0010_unhide_on_new_message.sql). Otherwise "delete" would be undone
+  // just by looking at the conversation from 友達一覧.
 
   useEffect(() => {
     const supabase = createClient();
