@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+const MIN_PASSWORD_LENGTH = 8;
+
+export default function ResetPasswordPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -15,20 +15,22 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    setLoading(false);
-
-    if (error) {
-      setError("メールアドレスかパスワードが違います");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`);
       return;
     }
 
-    // replace() alone already fetches /chat fresh (reading the just-set
-    // session cookie); a follow-up refresh() would just re-fetch it again.
+    setLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+
+    if (error) {
+      setError("パスワードの変更に失敗しました。再度メールのリンクからやり直してください");
+      return;
+    }
+
     router.replace("/chat");
   }
 
@@ -38,32 +40,18 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-4 rounded-2xl border border-black/10 p-6 shadow-sm dark:border-white/10"
       >
-        <h1 className="text-xl font-semibold">ログイン</h1>
-
-        <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium">
-            メールアドレス
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-black/15 px-3 py-2 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
-          />
-        </div>
+        <h1 className="text-xl font-semibold">新しいパスワードを設定</h1>
 
         <div className="space-y-1">
           <label htmlFor="password" className="text-sm font-medium">
-            パスワード
+            新しいパスワード（{MIN_PASSWORD_LENGTH}文字以上）
           </label>
           <input
             id="password"
             type="password"
             required
-            autoComplete="current-password"
+            minLength={MIN_PASSWORD_LENGTH}
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-lg border border-black/15 px-3 py-2 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
@@ -77,17 +65,8 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full rounded-lg bg-black px-3 py-2 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
         >
-          {loading ? "ログイン中..." : "ログイン"}
+          {loading ? "変更中..." : "変更する"}
         </button>
-
-        <div className="flex justify-between text-sm">
-          <Link href="/signup" className="underline">
-            新規登録はこちら
-          </Link>
-          <Link href="/forgot-password" className="text-black/50 underline dark:text-white/50">
-            パスワードをお忘れの方へ
-          </Link>
-        </div>
       </form>
     </main>
   );

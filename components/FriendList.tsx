@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { avatarColorFor } from "@/lib/avatarColor";
 import type { RoomSummary } from "@/lib/types";
 import SwipeableRow from "@/components/SwipeableRow";
+import Avatar from "@/components/Avatar";
 
 type Props = {
   rooms: RoomSummary[];
@@ -86,11 +86,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
                 ]}
               >
                 <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
-                  <span
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${avatarColorFor(room.friend.id)}`}
-                  >
-                    {room.friend.avatar_emoji}
-                  </span>
+                  <Avatar profile={room.friend} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1">
                       {room.pinned && <span className="text-xs">📌</span>}

@@ -2,8 +2,7 @@ export type Profile = {
   id: string;
   display_name: string;
   avatar_emoji: string;
-  login_id: string | null;
-  is_admin: boolean;
+  avatar_url: string | null;
   created_at: string;
 };
 

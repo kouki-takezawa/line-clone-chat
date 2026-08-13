@@ -5,18 +5,18 @@ import { usePathname } from "next/navigation";
 
 type Tab = { href: string; label: string; icon: string };
 
-export default function BottomTabBar({ isAdmin }: { isAdmin: boolean }) {
-  const pathname = usePathname();
+const TABS: Tab[] = [
+  { href: "/home", label: "友達一覧", icon: "👥" },
+  { href: "/chat", label: "トーク", icon: "💬" },
+  { href: "/settings", label: "設定", icon: "⚙️" },
+];
 
-  const tabs: Tab[] = [
-    { href: "/home", label: "友達一覧", icon: "👥" },
-    { href: "/chat", label: "トーク", icon: "💬" },
-    ...(isAdmin ? [{ href: "/settings", label: "設定", icon: "⚙️" }] : []),
-  ];
+export default function BottomTabBar() {
+  const pathname = usePathname();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-white pb-[env(safe-area-inset-bottom)] dark:border-white/10 dark:bg-neutral-950">
-      {tabs.map((tab) => {
+      {TABS.map((tab) => {
         const active = pathname === tab.href;
         return (
           <Link

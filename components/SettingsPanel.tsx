@@ -1,183 +1,115 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { compressImage } from "@/lib/image";
+import { avatarColorFor } from "@/lib/avatarColor";
 import NotificationToggle from "@/components/NotificationToggle";
-
-type UserRow = {
-  id: string;
-  display_name: string;
-  login_id: string | null;
-  avatar_emoji: string;
-  is_admin: boolean;
-};
-
-type Draft = { loginId: string; password: string; displayName: string };
-
-const emptyDraft: Draft = { loginId: "", password: "", displayName: "" };
-const MAX_FRIENDS = 5;
-const TTL_OPTIONS = Array.from({ length: 24 }, (_, i) => i + 1); // 1h〜24h
 
 type Props = {
   currentUserId: string;
-  initialTtlHours: number;
+  email: string;
+  displayName: string;
+  avatarEmoji: string;
+  avatarUrl: string | null;
+  ttlHours: number;
 };
 
-export default function SettingsPanel({ currentUserId, initialTtlHours }: Props) {
+export default function SettingsPanel({
+  currentUserId,
+  email,
+  displayName: initialDisplayName,
+  avatarEmoji,
+  avatarUrl: initialAvatarUrl,
+  ttlHours,
+}: Props) {
   const router = useRouter();
-  const [users, setUsers] = useState<UserRow[] | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
-  const [ttlHours, setTtlHours] = useState(initialTtlHours);
-  const [ttlSaving, setTtlSaving] = useState(false);
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
 
-  const [selfDraft, setSelfDraft] = useState<Draft>(emptyDraft);
-  const [selfSaving, setSelfSaving] = useState(false);
-  const [selfSaved, setSelfSaved] = useState(false);
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      const compressed = await compressImage(file);
+      // Uploaded via a server route (not the browser Supabase client) so the
+      // upload path is derived from the authenticated session server-side,
+      // not trusted from the client.
+      const res = await fetch("/api/avatar", { method: "POST", body: compressed });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "upload failed");
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<Draft>(emptyDraft);
-  const [rowBusy, setRowBusy] = useState<string | null>(null);
-
-  const [addDraft, setAddDraft] = useState<Draft>(emptyDraft);
-  const [adding, setAdding] = useState(false);
-
-  async function loadUsers() {
-    const res = await fetch("/api/admin/users");
-    const body = await res.json();
-    if (!res.ok) {
-      setError(body.error ?? "読み込みに失敗しました");
-      return;
-    }
-    setUsers(body.users);
-    const self = (body.users as UserRow[]).find((u) => u.id === currentUserId);
-    if (self) {
-      setSelfDraft({ loginId: self.login_id ?? "", password: "", displayName: self.display_name });
+      setAvatarUrl(data.url);
+    } catch {
+      setError("画像のアップロードに失敗しました");
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
-  useEffect(() => {
-    // loadUsers is also reused imperatively after mutations (save/add/delete),
-    // so it can't be inlined as a plain fetch-then-setState effect body, and
-    // is intentionally omitted from deps since it's stable across renders.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function saveSelf(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    setSelfSaving(true);
+    setSavingProfile(true);
+    setProfileSaved(false);
     setError(null);
-    setSelfSaved(false);
 
-    const payload: Record<string, string> = {
-      loginId: selfDraft.loginId,
-      displayName: selfDraft.displayName,
-    };
-    if (selfDraft.password) payload.password = selfDraft.password;
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ display_name: displayName.trim() || initialDisplayName })
+      .eq("id", currentUserId);
 
-    const res = await fetch(`/api/admin/users/${currentUserId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    setSelfSaving(false);
-
-    if (!res.ok) {
-      setError(body.error ?? "更新に失敗しました");
+    setSavingProfile(false);
+    if (updateError) {
+      setError("表示名の更新に失敗しました");
       return;
     }
-    setSelfDraft((d) => ({ ...d, password: "" }));
-    setSelfSaved(true);
-    loadUsers();
+    setProfileSaved(true);
   }
 
-  function startEdit(user: UserRow) {
-    setEditingId(user.id);
-    setEditDraft({ loginId: user.login_id ?? "", password: "", displayName: user.display_name });
-    setError(null);
-  }
-
-  async function saveEdit(id: string) {
-    setRowBusy(id);
-    setError(null);
-    const payload: Record<string, string> = {
-      loginId: editDraft.loginId,
-      displayName: editDraft.displayName,
-    };
-    if (editDraft.password) payload.password = editDraft.password;
-
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    setRowBusy(null);
-
-    if (!res.ok) {
-      setError(body.error ?? "更新に失敗しました");
-      return;
-    }
-    setEditingId(null);
-    loadUsers();
-  }
-
-  async function removeFriend(id: string) {
-    if (!confirm("この友達のアカウントとトーク履歴を削除します。よろしいですか？")) return;
-    setRowBusy(id);
-    setError(null);
-    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
-    const body = await res.json();
-    setRowBusy(null);
-    if (!res.ok) {
-      setError(body.error ?? "削除に失敗しました");
-      return;
-    }
-    loadUsers();
-  }
-
-  async function addFriend(e: React.FormEvent) {
+  async function savePassword(e: React.FormEvent) {
     e.preventDefault();
-    setAdding(true);
     setError(null);
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(addDraft),
-    });
-    const body = await res.json();
-    setAdding(false);
-    if (!res.ok) {
-      setError(body.error ?? "追加に失敗しました");
+    if (newPassword.length < 8) {
+      setError("パスワードは8文字以上で入力してください");
       return;
     }
-    setAddDraft(emptyDraft);
-    loadUsers();
-  }
+    setSavingPassword(true);
+    setPasswordSaved(false);
 
-  const friends = (users ?? []).filter((u) => u.id !== currentUserId);
+    const supabase = createClient();
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+    setSavingPassword(false);
+    if (updateError) {
+      setError("パスワードの変更に失敗しました");
+      return;
+    }
+    setNewPassword("");
+    setPasswordSaved(true);
+  }
 
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");
-  }
-
-  async function saveTtl(hours: number) {
-    setTtlHours(hours);
-    setTtlSaving(true);
-    setError(null);
-    const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("settings")
-      .update({ ttl_hours: hours })
-      .eq("id", true);
-    setTtlSaving(false);
-    if (updateError) setError(updateError.message);
   }
 
   return (
@@ -194,37 +126,81 @@ export default function SettingsPanel({ currentUserId, initialTtlHours }: Props)
         )}
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">自分のログイン情報</h2>
-          <form onSubmit={saveSelf} className="space-y-2">
+          <h2 className="text-sm font-semibold">プロフィール</h2>
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full disabled:opacity-50"
+              title="タップして画像を変更"
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span
+                  className={`flex h-full w-full items-center justify-center text-3xl ${avatarColorFor(currentUserId)}`}
+                >
+                  {avatarEmoji}
+                </span>
+              )}
+              <span className="absolute inset-x-0 bottom-0 bg-black/50 py-0.5 text-[10px] text-white">
+                {uploadingAvatar ? "..." : "変更"}
+              </span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="hidden"
+            />
+            <p className="text-xs text-black/50 dark:text-white/50">{email}</p>
+          </div>
+
+          <form onSubmit={saveProfile} className="space-y-2">
             <input
               type="text"
-              value={selfDraft.displayName}
-              onChange={(e) => setSelfDraft((d) => ({ ...d, displayName: e.target.value }))}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               placeholder="表示名"
-              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-            />
-            <input
-              type="text"
-              value={selfDraft.loginId}
-              onChange={(e) => setSelfDraft((d) => ({ ...d, loginId: e.target.value }))}
-              placeholder="ログインID（半角英数字4〜32文字）"
-              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-            />
-            <input
-              type="password"
-              value={selfDraft.password}
-              onChange={(e) => setSelfDraft((d) => ({ ...d, password: e.target.value }))}
-              placeholder="新しいパスワード（変更する場合のみ、6文字以上）"
               className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
             />
             <button
               type="submit"
-              disabled={selfSaving}
+              disabled={savingProfile}
               className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
-              {selfSaving ? "保存中..." : "保存"}
+              {savingProfile ? "保存中..." : "保存"}
             </button>
-            {selfSaved && <span className="ml-2 text-sm text-black/50 dark:text-white/50">保存しました</span>}
+            {profileSaved && (
+              <span className="ml-2 text-sm text-black/50 dark:text-white/50">保存しました</span>
+            )}
+          </form>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">パスワード変更</h2>
+          <form onSubmit={savePassword} className="space-y-2">
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="新しいパスワード（8文字以上）"
+              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
+            />
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {savingPassword ? "変更中..." : "変更する"}
+            </button>
+            {passwordSaved && (
+              <span className="ml-2 text-sm text-black/50 dark:text-white/50">変更しました</span>
+            )}
           </form>
         </section>
 
@@ -233,142 +209,11 @@ export default function SettingsPanel({ currentUserId, initialTtlHours }: Props)
           <NotificationToggle currentUserId={currentUserId} />
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">トークの自動削除</h2>
+        <section className="space-y-1">
+          <h2 className="text-sm font-semibold">メッセージの自動削除</h2>
           <p className="text-xs text-black/50 dark:text-white/50">
-            送信したメッセージ（画像含む）を、指定した時間が経過したら自動的に削除します。
+            送信したメッセージ・画像は送信から{ttlHours}時間で自動的に削除されます。
           </p>
-          <select
-            value={ttlHours}
-            disabled={ttlSaving}
-            onChange={(e) => saveTtl(Number(e.target.value))}
-            className="w-full rounded-lg border border-black/15 px-3 py-2 disabled:opacity-50 dark:border-white/20 dark:bg-neutral-900"
-          >
-            {TTL_OPTIONS.map((h) => (
-              <option key={h} value={h}>
-                {h}時間で削除
-              </option>
-            ))}
-          </select>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">
-            友達を追加 <span className="font-normal text-black/40 dark:text-white/40">({friends.length}/{MAX_FRIENDS})</span>
-          </h2>
-          {friends.length >= MAX_FRIENDS ? (
-            <p className="text-sm text-black/50 dark:text-white/50">
-              友達は最大{MAX_FRIENDS}人まで追加できます。追加するには、いずれかの友達を削除してください。
-            </p>
-          ) : (
-            <form onSubmit={addFriend} className="space-y-2">
-              <input
-                type="text"
-                value={addDraft.displayName}
-                onChange={(e) => setAddDraft((d) => ({ ...d, displayName: e.target.value }))}
-                placeholder="表示名（例: たろう）"
-                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-              />
-              <input
-                type="text"
-                value={addDraft.loginId}
-                onChange={(e) => setAddDraft((d) => ({ ...d, loginId: e.target.value }))}
-                placeholder="ログインID（半角英数字4〜32文字）"
-                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-              />
-              <input
-                type="password"
-                value={addDraft.password}
-                onChange={(e) => setAddDraft((d) => ({ ...d, password: e.target.value }))}
-                placeholder="パスワード（6文字以上）"
-                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-              />
-              <button
-                type="submit"
-                disabled={adding}
-                className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {adding ? "追加中..." : "追加"}
-              </button>
-            </form>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">友達一覧</h2>
-          {friends.length === 0 && (
-            <p className="text-sm text-black/50 dark:text-white/50">まだ友達がいません</p>
-          )}
-          <ul className="divide-y divide-black/10 dark:divide-white/10">
-            {friends.map((friend) => (
-              <li key={friend.id} className="py-3">
-                {editingId === friend.id ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={editDraft.displayName}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, displayName: e.target.value }))}
-                      placeholder="表示名"
-                      className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-                    />
-                    <input
-                      type="text"
-                      value={editDraft.loginId}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, loginId: e.target.value }))}
-                      placeholder="ログインID"
-                      className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-                    />
-                    <input
-                      type="password"
-                      value={editDraft.password}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, password: e.target.value }))}
-                      placeholder="新しいパスワード（変更する場合のみ）"
-                      className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(friend.id)}
-                        disabled={rowBusy === friend.id}
-                        className="rounded-full bg-[#06C755] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="rounded-full border border-black/15 px-4 py-1.5 text-sm dark:border-white/20"
-                      >
-                        キャンセル
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">
-                        {friend.avatar_emoji} {friend.display_name}
-                      </p>
-                      <p className="text-xs text-black/50 dark:text-white/50">ID: {friend.login_id}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => startEdit(friend)}
-                        className="rounded-full border border-black/15 px-3 py-1 text-sm dark:border-white/20"
-                      >
-                        編集
-                      </button>
-                      <button
-                        onClick={() => removeFriend(friend.id)}
-                        disabled={rowBusy === friend.id}
-                        className="rounded-full border border-red-300 px-3 py-1 text-sm text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
         </section>
 
         <section>

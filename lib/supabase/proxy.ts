@@ -1,14 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function updateSession(request: NextRequest) {
-  // "/" is the disguised entry screen (looks like a to-do app) and must be
-  // reachable without a session — it's what decides whether to reveal
-  // /login at all, so it can't itself require auth or redirect on visit.
-  if (request.nextUrl.pathname === "/") {
-    return NextResponse.next({ request });
-  }
+// Reachable without a session. /auth/callback and /reset-password are used
+// exactly when a session doesn't exist yet (email confirm) or only exists
+// as a short-lived recovery session (password reset) — they must never be
+// redirected away by the "no session -> /login" rule below.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"];
+// Bounce an already-authenticated visitor straight to /chat instead of
+// showing them the login/signup form again.
+const AUTH_ENTRY_PATHS = ["/login", "/signup"];
 
+export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -43,15 +45,15 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   const { pathname } = request.nextUrl;
-  const isLoginPage = pathname.startsWith("/login");
+  const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
-  if (!session && !isLoginPage) {
+  if (!session && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (session && isLoginPage) {
+  if (session && AUTH_ENTRY_PATHS.some((p) => pathname.startsWith(p))) {
     const url = request.nextUrl.clone();
     url.pathname = "/chat";
     return NextResponse.redirect(url);

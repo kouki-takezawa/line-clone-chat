@@ -19,8 +19,8 @@ export default function MessageList({ messages, currentUserId }: Props) {
   return (
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-neutral-100 p-4 dark:bg-neutral-900">
       {messages.length === 0 && (
-        <p className="mt-8 text-center text-sm text-black/40 dark:text-white/40">
-          まだメッセージはありません
+        <p className="mt-8 px-6 text-center text-sm text-black/40 dark:text-white/40">
+          24時間が経過するとメッセージは自動的に削除されます。新しいメッセージを送ってみましょう！
         </p>
       )}
       {messages.map((message) => (

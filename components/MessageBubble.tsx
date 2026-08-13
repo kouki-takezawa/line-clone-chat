@@ -16,10 +16,13 @@ export default function MessageBubble({ message, isOwn }: Props) {
     if (!message.image_path) return;
     let cancelled = false;
 
+    // 5-minute expiry (SECURITY_AND_CAPACITY.md): if a URL ever leaks, it's
+    // only useful for a few minutes. Re-fetched fresh on every mount, so
+    // the short lifetime doesn't affect normal viewing.
     const supabase = createClient();
     supabase.storage
       .from("chat-images")
-      .createSignedUrl(message.image_path, 3600)
+      .createSignedUrl(message.image_path, 300)
       .then(({ data }) => {
         if (!cancelled && data) setImageUrl(data.signedUrl);
       });

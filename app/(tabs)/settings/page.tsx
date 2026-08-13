@@ -4,25 +4,27 @@ import SettingsPanel from "@/components/SettingsPanel";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  // getSession() avoids the extra Auth-server round trip getUser() makes on
-  // every call. Safe here: this page's own gate is just UX — the actual
-  // privileged operations in SettingsPanel all go through /api/admin/*
-  // routes, which re-check admin status server-side via getUser().
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const user = session?.user;
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { data: settings }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).single(),
+    supabase.from("settings").select("ttl_hours").eq("id", true).single(),
+  ]);
 
-  if (!profile?.is_admin) redirect("/chat");
+  if (!profile) redirect("/login");
 
-  const { data: settings } = await supabase.from("settings").select("ttl_hours").eq("id", true).single();
-
-  return <SettingsPanel currentUserId={user.id} initialTtlHours={settings?.ttl_hours ?? 24} />;
+  return (
+    <SettingsPanel
+      currentUserId={user.id}
+      email={user.email ?? ""}
+      displayName={profile.display_name}
+      avatarEmoji={profile.avatar_emoji}
+      avatarUrl={profile.avatar_url}
+      ttlHours={settings?.ttl_hours ?? 24}
+    />
+  );
 }

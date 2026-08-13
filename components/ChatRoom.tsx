@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Message, MessageWithSender, Profile } from "@/lib/types";
-import { avatarColorFor } from "@/lib/avatarColor";
 import MessageList from "@/components/MessageList";
 import Composer from "@/components/Composer";
+import Avatar from "@/components/Avatar";
 
 type Props = {
   roomId: string;
@@ -83,11 +83,7 @@ export default function ChatRoom({
         >
           ←
         </Link>
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${avatarColorFor(friend.id)}`}
-        >
-          {friend.avatar_emoji}
-        </span>
+        <Avatar profile={friend} size="h-9 w-9" />
         <h1 className="truncate text-base font-semibold">{friend.display_name}</h1>
       </header>
 

@@ -4,10 +4,25 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, getImageDimensions } from "@/lib/image";
 
+const MAX_MESSAGE_LENGTH = 1000;
+const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20MB, before compression
+
 type Props = {
   roomId: string;
   currentUserId: string;
 };
+
+function describeError(error: { message: string }, fallback: string): string {
+  if (error.message.includes("rate limit")) {
+    return error.message.includes("image")
+      ? "画像の送信が多すぎます。しばらく待ってから送信してください"
+      : "送信が速すぎます。少し待ってから送信してください";
+  }
+  if (error.message.includes("messages_body_length")) {
+    return `メッセージは${MAX_MESSAGE_LENGTH}文字以内で入力してください`;
+  }
+  return fallback;
+}
 
 export default function Composer({ roomId, currentUserId }: Props) {
   const [body, setBody] = useState("");
@@ -30,7 +45,7 @@ export default function Composer({ roomId, currentUserId }: Props) {
 
     setSending(false);
     if (error) {
-      setError("送信に失敗しました");
+      setError(describeError(error, "送信に失敗しました"));
       return;
     }
     setBody("");
@@ -40,6 +55,11 @@ export default function Composer({ roomId, currentUserId }: Props) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || sending) return;
+
+    if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
+      setError("画像が大きすぎます（20MB以下にしてください）");
+      return;
+    }
 
     setSending(true);
     setError(null);
@@ -66,8 +86,10 @@ export default function Composer({ roomId, currentUserId }: Props) {
         image_height: height,
       });
       if (insertError) throw insertError;
-    } catch {
-      setError("画像の送信に失敗しました");
+    } catch (err) {
+      setError(
+        err instanceof Error ? describeError(err, "画像の送信に失敗しました") : "画像の送信に失敗しました",
+      );
     } finally {
       setSending(false);
     }
@@ -83,7 +105,7 @@ export default function Composer({ roomId, currentUserId }: Props) {
         onClick={() => fileInputRef.current?.click()}
         disabled={sending}
         aria-label="画像を送信"
-        className="rounded-full border border-black/15 px-3 py-2 text-lg disabled:opacity-50 dark:border-white/20"
+        className="shrink-0 rounded-full border border-black/15 px-3 py-2 text-lg disabled:opacity-50 dark:border-white/20"
       >
         📷
       </button>
@@ -100,16 +122,17 @@ export default function Composer({ roomId, currentUserId }: Props) {
         onChange={(e) => setBody(e.target.value)}
         placeholder="メッセージを入力"
         disabled={sending}
+        maxLength={MAX_MESSAGE_LENGTH}
         className="flex-1 rounded-full border border-black/15 px-4 py-2 outline-none focus:border-black/40 disabled:opacity-50 dark:border-white/20 dark:focus:border-white/50"
       />
       <button
         type="submit"
         disabled={sending || !body.trim()}
-        className="rounded-full bg-black px-4 py-2 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+        className="shrink-0 whitespace-nowrap rounded-full bg-[#06C755] px-4 py-2 font-medium text-white disabled:opacity-50"
       >
         送信
       </button>
-      {error && <p className="absolute mt-14 text-xs text-red-600">{error}</p>}
+      {error && <p className="absolute -top-6 left-3 text-xs text-red-600">{error}</p>}
     </form>
   );
 }
