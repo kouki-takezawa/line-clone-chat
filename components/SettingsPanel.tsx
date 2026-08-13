@@ -14,6 +14,7 @@ type UserRow = {
 type Draft = { loginId: string; password: string; displayName: string };
 
 const emptyDraft: Draft = { loginId: "", password: "", displayName: "" };
+const MAX_FRIENDS = 5;
 
 export default function SettingsPanel({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
@@ -204,37 +205,45 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">友達を追加</h2>
-          <form onSubmit={addFriend} className="space-y-2">
-            <input
-              type="text"
-              value={addDraft.displayName}
-              onChange={(e) => setAddDraft((d) => ({ ...d, displayName: e.target.value }))}
-              placeholder="表示名（例: たろう）"
-              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-            />
-            <input
-              type="text"
-              value={addDraft.loginId}
-              onChange={(e) => setAddDraft((d) => ({ ...d, loginId: e.target.value }))}
-              placeholder="ログインID（半角英数字4〜32文字）"
-              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-            />
-            <input
-              type="password"
-              value={addDraft.password}
-              onChange={(e) => setAddDraft((d) => ({ ...d, password: e.target.value }))}
-              placeholder="パスワード（6文字以上）"
-              className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
-            />
-            <button
-              type="submit"
-              disabled={adding}
-              className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {adding ? "追加中..." : "追加"}
-            </button>
-          </form>
+          <h2 className="text-sm font-semibold">
+            友達を追加 <span className="font-normal text-black/40 dark:text-white/40">({friends.length}/{MAX_FRIENDS})</span>
+          </h2>
+          {friends.length >= MAX_FRIENDS ? (
+            <p className="text-sm text-black/50 dark:text-white/50">
+              友達は最大{MAX_FRIENDS}人まで追加できます。追加するには、いずれかの友達を削除してください。
+            </p>
+          ) : (
+            <form onSubmit={addFriend} className="space-y-2">
+              <input
+                type="text"
+                value={addDraft.displayName}
+                onChange={(e) => setAddDraft((d) => ({ ...d, displayName: e.target.value }))}
+                placeholder="表示名（例: たろう）"
+                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
+              />
+              <input
+                type="text"
+                value={addDraft.loginId}
+                onChange={(e) => setAddDraft((d) => ({ ...d, loginId: e.target.value }))}
+                placeholder="ログインID（半角英数字4〜32文字）"
+                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
+              />
+              <input
+                type="password"
+                value={addDraft.password}
+                onChange={(e) => setAddDraft((d) => ({ ...d, password: e.target.value }))}
+                placeholder="パスワード（6文字以上）"
+                className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
+              />
+              <button
+                type="submit"
+                disabled={adding}
+                className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {adding ? "追加中..." : "追加"}
+              </button>
+            </form>
+          )}
         </section>
 
         <section className="space-y-3">

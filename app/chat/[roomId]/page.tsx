@@ -10,27 +10,28 @@ export default async function TalkPage({
 }) {
   const { roomId } = await params;
   const supabase = await createClient();
+  // getSession() avoids the extra Auth-server round trip getUser() makes on
+  // every call — safe here since every query below is still RLS-scoped by
+  // the request's actual JWT, not by this id.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) redirect("/login");
 
-  const { data: membership } = await supabase
-    .from("room_members")
-    .select("room_id")
-    .eq("room_id", roomId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  // RLS already blocks reading rooms you're not in; this just gives a
-  // proper 404 instead of an empty/broken screen for a stale or foreign link.
-  if (!membership) notFound();
-
-  const { data: memberRowsRaw } = await supabase
-    .from("room_members")
-    .select("profile:profiles(*)")
-    .eq("room_id", roomId);
+  // No separate membership pre-check: RLS already restricts room_members to
+  // rows the caller can see, so a non-member's memberRows fetch comes back
+  // empty and "friend" ends up undefined below — same 404 outcome, one
+  // fewer round trip.
+  const [{ data: memberRowsRaw }, { data: messages }] = await Promise.all([
+    supabase.from("room_members").select("profile:profiles(*)").eq("room_id", roomId),
+    supabase
+      .from("messages")
+      .select("*, sender:profiles(*)")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true }),
+  ]);
   const memberRows = memberRowsRaw as unknown as Array<{ profile: Profile | null }> | null;
 
   const members = (memberRows ?? [])
@@ -39,12 +40,6 @@ export default async function TalkPage({
 
   const friend = members.find((m) => m.id !== user.id);
   if (!friend) notFound();
-
-  const { data: messages } = await supabase
-    .from("messages")
-    .select("*, sender:profiles(*)")
-    .eq("room_id", roomId)
-    .order("created_at", { ascending: true });
 
   return (
     <ChatRoom

@@ -30,8 +30,9 @@ export default function LoginPage() {
       return;
     }
 
+    // replace() alone already fetches /chat fresh (reading the just-set
+    // session cookie); a follow-up refresh() would just re-fetch it again.
     router.replace("/chat");
-    router.refresh();
   }
 
   return (

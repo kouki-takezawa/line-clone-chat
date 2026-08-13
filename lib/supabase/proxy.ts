@@ -32,20 +32,26 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
+  // getSession() reads the JWT from the cookie locally — no network round
+  // trip to the Auth server — unlike getUser(), which re-validates on every
+  // call. That round trip on every single navigation is what made screen
+  // transitions feel slow. This is safe here because this check only drives
+  // a UX redirect; the real security boundary is Postgres RLS, which
+  // independently (and always) validates the JWT on every data query.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname.startsWith("/login");
 
-  if (!user && !isLoginPage) {
+  if (!session && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (session && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/chat";
     return NextResponse.redirect(url);

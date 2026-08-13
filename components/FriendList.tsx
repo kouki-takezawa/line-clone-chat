@@ -30,8 +30,9 @@ export default function FriendList({ rooms, currentUserId, isAdmin }: Props) {
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // replace() alone already fetches /login fresh (reading the now-cleared
+    // session cookie); a follow-up refresh() would just re-fetch it again.
     router.replace("/login");
-    router.refresh();
   }
 
   return (

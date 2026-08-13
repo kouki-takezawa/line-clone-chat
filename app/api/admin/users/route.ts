@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isValidLoginId, isValidPassword, loginIdToEmail } from "@/lib/loginId";
 
+const MAX_FRIENDS = 5;
+
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -37,6 +39,19 @@ export async function POST(request: Request) {
   }
 
   const adminClient = createAdminClient();
+
+  const { count: friendCount, error: countError } = await adminClient
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("is_admin", false);
+
+  if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
+  if ((friendCount ?? 0) >= MAX_FRIENDS) {
+    return NextResponse.json(
+      { error: `友達は最大${MAX_FRIENDS}人までです` },
+      { status: 400 },
+    );
+  }
 
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email: loginIdToEmail(loginId),
