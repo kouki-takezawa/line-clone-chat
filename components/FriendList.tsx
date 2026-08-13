@@ -1,16 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { avatarColorFor } from "@/lib/avatarColor";
-import type { RoomSummary } from "@/app/chat/page";
-import NotificationToggle from "@/components/NotificationToggle";
+import type { RoomSummary } from "@/lib/types";
+import SwipeableRow from "@/components/SwipeableRow";
 
 type Props = {
   rooms: RoomSummary[];
   currentUserId: string;
-  isAdmin: boolean;
 };
 
 function formatTime(iso: string) {
@@ -24,76 +23,88 @@ function lastMessageLabel(message: RoomSummary["lastMessage"]) {
   return "";
 }
 
-export default function FriendList({ rooms, currentUserId, isAdmin }: Props) {
-  const router = useRouter();
+function sortRooms(rooms: RoomSummary[]) {
+  return [...rooms].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    const at = a.lastMessage?.created_at ?? "";
+    const bt = b.lastMessage?.created_at ?? "";
+    return bt.localeCompare(at);
+  });
+}
 
-  async function handleSignOut() {
+export default function FriendList({ rooms: initialRooms, currentUserId }: Props) {
+  const router = useRouter();
+  const [rooms, setRooms] = useState(initialRooms);
+
+  async function togglePin(roomId: string, pinned: boolean) {
+    setRooms((prev) => sortRooms(prev.map((r) => (r.id === roomId ? { ...r, pinned: !pinned } : r))));
     const supabase = createClient();
-    await supabase.auth.signOut();
-    // replace() alone already fetches /login fresh (reading the now-cleared
-    // session cookie); a follow-up refresh() would just re-fetch it again.
-    router.replace("/login");
+    await supabase
+      .from("room_members")
+      .update({ pinned: !pinned })
+      .eq("room_id", roomId)
+      .eq("user_id", currentUserId);
+  }
+
+  async function deleteTalk(roomId: string) {
+    setRooms((prev) => prev.filter((r) => r.id !== roomId));
+    const supabase = createClient();
+    await supabase
+      .from("room_members")
+      .update({ talk_hidden: true })
+      .eq("room_id", roomId)
+      .eq("user_id", currentUserId);
   }
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between bg-[#06C755] px-4 py-3 text-white">
+      <header className="bg-[#06C755] px-4 py-3 text-white">
         <h1 className="text-lg font-semibold">トーク</h1>
-        <div className="flex items-center gap-2">
-          <NotificationToggle currentUserId={currentUserId} />
-          {isAdmin && (
-            <Link
-              href="/settings"
-              title="設定（管理者のみ）"
-              className="rounded-full bg-white/15 px-3 py-1 text-sm"
-            >
-              ⚙️ 設定
-            </Link>
-          )}
-          <button onClick={handleSignOut} className="rounded-full bg-white/15 px-3 py-1 text-sm">
-            ログアウト
-          </button>
-        </div>
       </header>
 
       {rooms.length === 0 ? (
         <p className="flex-1 p-6 text-center text-sm text-black/50 dark:text-white/50">
-          まだ友達が追加されていません。
-          {isAdmin && (
-            <>
-              <br />
-              <Link href="/settings" className="underline">
-                設定
-              </Link>
-              から友達を追加してください。
-            </>
-          )}
+          トークがありません。ホームから友達を選んで話しかけてみましょう。
         </p>
       ) : (
         <ul className="min-h-0 flex-1 divide-y divide-black/5 overflow-y-auto dark:divide-white/10">
           {rooms.map((room) => (
             <li key={room.id}>
-              <Link
-                href={`/chat/${room.id}`}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10"
+              <SwipeableRow
+                onTap={() => router.push(`/chat/${room.id}`)}
+                actions={[
+                  {
+                    label: room.pinned ? "ピン解除" : "ピン止め",
+                    onClick: () => togglePin(room.id, room.pinned),
+                    className: "bg-amber-500",
+                  },
+                  {
+                    label: "削除",
+                    onClick: () => deleteTalk(room.id),
+                    className: "bg-red-500",
+                  },
+                ]}
               >
-                <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${avatarColorFor(room.friend.id)}`}
-                >
-                  {room.friend.avatar_emoji}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline justify-between">
-                    <span className="font-medium">{room.friend.display_name}</span>
-                    <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
-                      {room.lastMessage ? formatTime(room.lastMessage.created_at) : ""}
+                <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
+                  <span
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${avatarColorFor(room.friend.id)}`}
+                  >
+                    {room.friend.avatar_emoji}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-1">
+                      {room.pinned && <span className="text-xs">📌</span>}
+                      <span className="flex-1 truncate font-medium">{room.friend.display_name}</span>
+                      <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
+                        {room.lastMessage ? formatTime(room.lastMessage.created_at) : ""}
+                      </span>
+                    </span>
+                    <span className="block truncate text-sm text-black/50 dark:text-white/50">
+                      {lastMessageLabel(room.lastMessage)}
                     </span>
                   </span>
-                  <span className="block truncate text-sm text-black/50 dark:text-white/50">
-                    {lastMessageLabel(room.lastMessage)}
-                  </span>
-                </span>
-              </Link>
+                </div>
+              </SwipeableRow>
             </li>
           ))}
         </ul>

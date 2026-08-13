@@ -31,6 +31,19 @@ export default function ChatRoom({
   }, [members]);
 
   useEffect(() => {
+    // Opening a talk un-hides it from the トーク list, in case it was
+    // previously removed there via the swipe action (which only hides it
+    // for this viewer — it never touched the room or the other person).
+    const supabase = createClient();
+    supabase
+      .from("room_members")
+      .update({ talk_hidden: false })
+      .eq("room_id", roomId)
+      .eq("user_id", currentUserId)
+      .then(() => {});
+  }, [roomId, currentUserId]);
+
+  useEffect(() => {
     const supabase = createClient();
 
     const channel = supabase

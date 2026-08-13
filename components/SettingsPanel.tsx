@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import NotificationToggle from "@/components/NotificationToggle";
 
 type UserRow = {
   id: string;
@@ -17,6 +19,7 @@ const emptyDraft: Draft = { loginId: "", password: "", displayName: "" };
 const MAX_FRIENDS = 5;
 
 export default function SettingsPanel({ currentUserId }: { currentUserId: string }) {
+  const router = useRouter();
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,17 +152,16 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
 
   const friends = (users ?? []).filter((u) => u.id !== currentUserId);
 
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex items-center gap-3 bg-[#06C755] px-2 py-3 text-white">
-        <Link
-          href="/chat"
-          aria-label="トーク一覧に戻る"
-          className="rounded-full p-2 text-xl leading-none active:bg-white/15"
-        >
-          ←
-        </Link>
-        <h1 className="text-base font-semibold">設定</h1>
+      <header className="bg-[#06C755] px-4 py-3 text-white">
+        <h1 className="text-lg font-semibold">設定</h1>
       </header>
 
       <div className="flex-1 space-y-8 overflow-y-auto p-4">
@@ -202,6 +204,11 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
             </button>
             {selfSaved && <span className="ml-2 text-sm text-black/50 dark:text-white/50">保存しました</span>}
           </form>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">通知</h2>
+          <NotificationToggle currentUserId={currentUserId} />
         </section>
 
         <section className="space-y-3">
@@ -321,6 +328,15 @@ export default function SettingsPanel({ currentUserId }: { currentUserId: string
               </li>
             ))}
           </ul>
+        </section>
+
+        <section>
+          <button
+            onClick={handleSignOut}
+            className="w-full rounded-full border border-black/15 px-4 py-2 text-sm text-black/60 dark:border-white/20 dark:text-white/60"
+          >
+            ログアウト
+          </button>
         </section>
       </div>
     </div>

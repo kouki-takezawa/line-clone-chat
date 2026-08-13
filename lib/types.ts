@@ -17,6 +17,8 @@ export type RoomMember = {
   room_id: string;
   user_id: string;
   joined_at: string;
+  pinned: boolean;
+  talk_hidden: boolean;
 };
 
 export type Message = {
@@ -87,3 +89,12 @@ export type Database = {
 
 // A message joined with its sender's profile, as used by the chat UI.
 export type MessageWithSender = Message & { sender: Profile };
+
+// One row in the トーク (talk) list: a room plus the other member and the
+// current viewer's own per-room preferences for it.
+export type RoomSummary = {
+  id: string;
+  friend: Profile;
+  lastMessage: Message | null;
+  pinned: boolean;
+};

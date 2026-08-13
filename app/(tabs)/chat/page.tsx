@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import FriendList from "@/components/FriendList";
-import type { Message, Profile } from "@/lib/types";
+import type { Profile, RoomSummary } from "@/lib/types";
 
-export type RoomSummary = {
-  id: string;
-  friend: Profile;
-  lastMessage: Message | null;
+type MemberRow = {
+  room_id: string;
+  user_id: string;
+  pinned: boolean;
+  talk_hidden: boolean;
+  profile: Profile | null;
 };
 
 export default async function ChatListPage() {
@@ -22,47 +24,45 @@ export default async function ChatListPage() {
   if (!user) redirect("/login");
 
   // RLS already restricts room_members/messages to rows the caller can see,
-  // so none of these three queries need an explicit room_id filter — that
-  // lets all three run in a single parallel round trip instead of the
-  // previous profile -> memberships -> per-room-members -> per-room-message
-  // chain (up to 3 sequential hops plus one per room).
-  const [{ data: profile }, { data: allMembersRaw }, { data: recentMessages }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase.from("room_members").select("room_id, profile:profiles(*)"),
+  // so none of these queries need an explicit room_id filter — that lets
+  // them run in a single parallel round trip.
+  const [{ data: allMembersRaw }, { data: recentMessages }] = await Promise.all([
+    supabase.from("room_members").select("room_id, user_id, pinned, talk_hidden, profile:profiles(*)"),
     supabase.from("messages").select("*").order("created_at", { ascending: false }).limit(200),
   ]);
-
-  const allMembers = allMembersRaw as unknown as Array<{
-    room_id: string;
-    profile: Profile | null;
-  }> | null;
+  const allMembers = allMembersRaw as unknown as MemberRow[] | null;
 
   const friendByRoom = new Map<string, Profile>();
+  const myPrefsByRoom = new Map<string, { pinned: boolean; talk_hidden: boolean }>();
   for (const row of allMembers ?? []) {
-    const p = row.profile;
-    if (p && p.id !== user.id) friendByRoom.set(row.room_id, p);
+    if (row.user_id === user.id) {
+      myPrefsByRoom.set(row.room_id, { pinned: row.pinned, talk_hidden: row.talk_hidden });
+    } else if (row.profile) {
+      friendByRoom.set(row.room_id, row.profile);
+    }
   }
 
   // Messages arrive sorted newest-first, so the first occurrence per room is
   // already its most recent message.
-  const lastByRoom = new Map<string, Message>();
+  const lastByRoom = new Map<string, RoomSummary["lastMessage"]>();
   for (const message of recentMessages ?? []) {
     if (!lastByRoom.has(message.room_id)) lastByRoom.set(message.room_id, message);
   }
 
   const rooms: RoomSummary[] = [...friendByRoom.entries()]
-    .map(([roomId, friend]) => ({ id: roomId, friend, lastMessage: lastByRoom.get(roomId) ?? null }))
+    .filter(([roomId]) => !myPrefsByRoom.get(roomId)?.talk_hidden)
+    .map(([roomId, friend]) => ({
+      id: roomId,
+      friend,
+      lastMessage: lastByRoom.get(roomId) ?? null,
+      pinned: myPrefsByRoom.get(roomId)?.pinned ?? false,
+    }))
     .sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       const at = a.lastMessage?.created_at ?? "";
       const bt = b.lastMessage?.created_at ?? "";
       return bt.localeCompare(at);
     });
 
-  return (
-    <FriendList
-      rooms={rooms}
-      currentUserId={user.id}
-      isAdmin={profile?.is_admin ?? false}
-    />
-  );
+  return <FriendList rooms={rooms} currentUserId={user.id} />;
 }
