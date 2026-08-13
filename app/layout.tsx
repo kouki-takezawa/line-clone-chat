@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "プライベートチャット",
-  description: "24時間で自動削除されるプライベートチャット",
+  title: "ToDo",
+  description: "シンプルなやることリスト",
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/apple-touch-icon.png",

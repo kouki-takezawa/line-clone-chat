@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "プライベートチャット",
-    short_name: "トーク",
-    description: "24時間で自動削除されるプライベートチャット",
-    start_url: "/chat",
+    name: "ToDo",
+    short_name: "ToDo",
+    description: "シンプルなやることリスト",
+    start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#06C755",
