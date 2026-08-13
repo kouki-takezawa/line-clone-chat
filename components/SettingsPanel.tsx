@@ -181,7 +181,7 @@ export default function SettingsPanel({ currentUserId, initialTtlHours }: Props)
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <header className="border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950">
         <h1 className="text-lg font-semibold">設定</h1>
       </header>

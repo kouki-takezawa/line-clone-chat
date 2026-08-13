@@ -70,7 +70,11 @@ export default function ChatRoom({
   }, [roomId]);
 
   return (
-    <div className="flex flex-1 flex-col">
+    // position: fixed for the same reason as the (tabs) shell: the root
+    // layout's <body> only has a min-height, so without this, a long
+    // message list would grow the whole page instead of scrolling inside
+    // MessageList — dragging the header and composer along with it.
+    <div className="fixed inset-0 flex flex-col bg-white dark:bg-neutral-950">
       <header className="flex items-center gap-3 border-b border-black/10 bg-white px-2 py-3 dark:border-white/10 dark:bg-neutral-950">
         <Link
           href="/chat"
