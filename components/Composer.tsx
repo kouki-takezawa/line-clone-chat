@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -35,15 +35,6 @@ export default function Composer({ onSendText, onSendImages, onTyping, error }: 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     submit();
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter sends, Shift+Enter (or IME composition) inserts a newline —
-    // matches LINE's own input behavior instead of always requiring a tap.
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      submit();
-    }
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -106,7 +97,6 @@ export default function Composer({ onSendText, onSendImages, onTyping, error }: 
           onTyping();
           resizeTextarea();
         }}
-        onKeyDown={handleKeyDown}
         placeholder="メッセージを入力"
         maxLength={MAX_MESSAGE_LENGTH}
         className="max-h-[120px] flex-1 resize-none rounded-2xl border border-black/15 px-4 py-2 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
