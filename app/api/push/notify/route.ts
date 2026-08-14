@@ -6,7 +6,8 @@ import type { PushSubscriptionRow } from "@/lib/types";
 
 type NotifyBody =
   | { type: "message"; roomId: string; body: string }
-  | { type: "friend_request"; toUserId: string };
+  | { type: "friend_request"; toUserId: string }
+  | { type: "friend_accepted"; toUserId: string };
 
 async function sendToUser(userId: string, title: string, body: string, roomId?: string) {
   const admin = createAdminClient();
@@ -62,18 +63,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const { data: senderProfile } = await supabase
+    const [{ data: senderProfile }, { data: recipientProfile }] = await Promise.all([
+      supabase.from("profiles").select("display_name").eq("id", user.id).single(),
+      // service-role: the recipient's own preference isn't visible to the
+      // sender under normal RLS ("update own profile" is the only policy),
+      // and this route needs to read it to decide what the recipient sees.
+      createAdminClient().from("profiles").select("show_notification_preview").eq("id", recipient.user_id).single(),
+    ]);
+
+    const title = senderProfile?.display_name ?? "新着メッセージ";
+    const previewBody = recipientProfile?.show_notification_preview === false ? "新着メッセージがあります" : body.body.slice(0, 200);
+
+    await sendToUser(recipient.user_id, title, previewBody, body.roomId);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.type === "friend_accepted") {
+    // Only notify if the caller really is the to_user of an accepted
+    // request from this from_user — RLS lets the caller see their own
+    // received requests, so this confirms it's a real acceptance.
+    const { data: existing } = await supabase
+      .from("friend_requests")
+      .select("id")
+      .eq("from_user", body.toUserId)
+      .eq("to_user", user.id)
+      .eq("status", "accepted")
+      .maybeSingle();
+    if (!existing) {
+      return NextResponse.json({ ok: true });
+    }
+
+    const { data: accepterProfile } = await supabase
       .from("profiles")
       .select("display_name")
       .eq("id", user.id)
       .single();
 
-    await sendToUser(
-      recipient.user_id,
-      senderProfile?.display_name ?? "新着メッセージ",
-      body.body.slice(0, 200),
-      body.roomId,
-    );
+    await sendToUser(body.toUserId, "友達申請が承認されました", `${accepterProfile?.display_name ?? "相手"}さんと友達になりました`);
     return NextResponse.json({ ok: true });
   }
 

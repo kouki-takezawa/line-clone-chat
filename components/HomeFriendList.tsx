@@ -17,18 +17,20 @@ type Props = {
 export default function HomeFriendList({ me, friends: initialFriends, pendingRequestCount }: Props) {
   const router = useRouter();
   const [friends, setFriends] = useState(initialFriends);
+  const [query, setQuery] = useState("");
 
   // See FriendList.tsx for why this is needed: SwipeableRow can't be a
   // <Link>, so it misses Link's automatic prefetch.
   useEffect(() => {
     router.prefetch("/home/me");
-    for (const { roomId } of friends) {
-      router.prefetch(`/chat/${roomId}`);
+    for (const { friend } of friends) {
+      router.prefetch(`/home/friend/${friend.id}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [friends.length]);
 
   async function removeFriend(roomId: string, friendId: string) {
+    if (!window.confirm("この友達を削除しますか？(自分の一覧からのみ削除されます)")) return;
     setFriends((prev) => prev.filter((f) => f.friend.id !== friendId));
     const supabase = createClient();
     await supabase
@@ -39,6 +41,7 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
   }
 
   async function blockFriend(roomId: string, friendId: string) {
+    if (!window.confirm("この友達をブロックしますか？お互いにメッセージが送れなくなります。")) return;
     setFriends((prev) => prev.filter((f) => f.friend.id !== friendId));
     const supabase = createClient();
     await Promise.all([
@@ -50,6 +53,10 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
         .eq("user_id", me.id),
     ]);
   }
+
+  const visibleFriends = query.trim()
+    ? friends.filter(({ friend }) => friend.display_name.toLowerCase().includes(query.trim().toLowerCase()))
+    : friends;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -86,16 +93,32 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
           </span>
         </Link>
 
+        {friends.length > 0 && (
+          <div className="border-b border-black/5 px-4 py-2 dark:border-white/10">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="友達を検索"
+              className="w-full rounded-full border border-black/15 px-3 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:bg-neutral-900 dark:focus:border-white/50"
+            />
+          </div>
+        )}
+
         {friends.length === 0 ? (
           <p className="p-6 text-center text-sm text-black/50 dark:text-white/50">
             まだ友達が追加されていません。「＋追加」からIDまたはQRコードで友達を探せます。
           </p>
+        ) : visibleFriends.length === 0 ? (
+          <p className="p-6 text-center text-sm text-black/50 dark:text-white/50">
+            「{query}」に一致する友達が見つかりません。
+          </p>
         ) : (
           <ul className="divide-y divide-black/5 dark:divide-white/10">
-            {friends.map(({ roomId, friend }) => (
+            {visibleFriends.map(({ roomId, friend }) => (
               <li key={friend.id}>
                 <SwipeableRow
-                  onTap={() => router.push(`/chat/${roomId}`)}
+                  onTap={() => router.push(`/home/friend/${friend.id}`)}
                   actions={[
                     {
                       label: "削除",

@@ -13,8 +13,17 @@ type Props = {
   currentUserId: string;
 };
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+function formatListTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "昨日";
+
+  return d.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
 }
 
 function lastMessageLabel(message: RoomSummary["lastMessage"]) {
@@ -60,6 +69,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
   }
 
   async function deleteTalk(roomId: string) {
+    if (!window.confirm("このトークを削除しますか？(自分の画面からのみ削除され、相手には残ります)")) return;
     setRooms((prev) => prev.filter((r) => r.id !== roomId));
     const supabase = createClient();
     await supabase
@@ -107,7 +117,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
                       {room.muted && <span className="text-xs">🔕</span>}
                       <span className="flex-1 truncate font-medium">{room.friend.display_name}</span>
                       <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
-                        {room.lastMessage ? formatTime(room.lastMessage.created_at) : ""}
+                        {room.lastMessage ? formatListTime(room.lastMessage.created_at) : ""}
                       </span>
                     </span>
                     <span className="block truncate text-sm text-black/50 dark:text-white/50">

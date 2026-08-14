@@ -30,7 +30,7 @@ export default function FriendRequestsPage() {
     void load();
   }, [load]);
 
-  async function accept(requestId: string) {
+  async function accept(requestId: string, fromUserId: string) {
     setBusyId(requestId);
     setError(null);
     const supabase = createClient();
@@ -42,6 +42,11 @@ export default function FriendRequestsPage() {
     }
     setIncoming((prev) => prev?.filter((r) => r.id !== requestId) ?? null);
     setMessage("友達になりました！");
+    fetch("/api/push/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "friend_accepted", toUserId: fromUserId }),
+    }).catch(() => {});
   }
 
   async function reject(requestId: string) {
@@ -108,20 +113,27 @@ export default function FriendRequestsPage() {
                   className="flex items-center gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10"
                 >
                   <Avatar profile={req} />
-                  <span className="flex-1 font-medium">{req.display_name}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{req.display_name}</span>
+                    {req.message && (
+                      <span className="block truncate text-xs text-black/50 dark:text-white/50">
+                        {req.message}
+                      </span>
+                    )}
+                  </span>
                   <button
                     type="button"
                     onClick={() => reject(req.id)}
                     disabled={busyId === req.id}
-                    className="rounded-full border border-black/15 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-white/20"
+                    className="shrink-0 rounded-full border border-black/15 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-white/20"
                   >
                     拒否
                   </button>
                   <button
                     type="button"
-                    onClick={() => accept(req.id)}
+                    onClick={() => accept(req.id, req.from_user)}
                     disabled={busyId === req.id}
-                    className="rounded-full bg-[#06C755] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    className="shrink-0 rounded-full bg-[#06C755] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                   >
                     承認
                   </button>

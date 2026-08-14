@@ -4,6 +4,7 @@ export type Profile = {
   avatar_emoji: string;
   avatar_url: string | null;
   friend_code: string;
+  show_notification_preview: boolean;
   created_at: string;
 };
 
@@ -29,6 +30,7 @@ export type FriendRequest = {
   from_user: string;
   to_user: string;
   status: "pending" | "accepted" | "rejected";
+  message: string | null;
   created_at: string;
   responded_at: string | null;
 };
@@ -53,6 +55,7 @@ type RequestProfileFields = {
   display_name: string;
   avatar_emoji: string;
   avatar_url: string | null;
+  message: string | null;
   created_at: string;
 };
 

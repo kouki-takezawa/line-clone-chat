@@ -29,6 +29,7 @@ type Props = {
   ttlHours: number;
   initialFriendLastReadAt: string | null;
   initialMuted: boolean;
+  initialMyLastReadAt: string | null;
 };
 
 // Fire-and-forget: push delivery is a nicety, never something that should
@@ -63,8 +64,14 @@ export default function ChatRoom({
   ttlHours,
   initialFriendLastReadAt,
   initialMuted,
+  initialMyLastReadAt,
 }: Props) {
   const [messages, setMessages] = useState<PendingMessage[]>(initialMessages);
+  // Captured once via the lazy initializer and never updated — this is the
+  // read boundary for the "ここから未読" divider, which must stay put even
+  // as the mount-time effect below immediately bumps the real
+  // last_read_at to now().
+  const [myLastReadAtBeforeOpen] = useState(initialMyLastReadAt);
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>(() => {
     const grouped: Record<string, MessageReaction[]> = {};
     for (const r of initialReactions) {
@@ -422,18 +429,21 @@ export default function ChatRoom({
     channelRef.current?.send({ type: "broadcast", event: "typing", payload: { userId: currentUserId } });
   }
 
-  async function handleSendImage(file: File) {
-    if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
+  async function handleSendImages(files: File[]) {
+    const oversized = files.find((f) => f.size > MAX_ORIGINAL_IMAGE_BYTES);
+    if (oversized) {
       setImageError("画像が大きすぎます（20MB以下にしてください）");
       return;
     }
     setImageError(null);
-    try {
-      const compressed = await compressImage(file);
-      const { width, height } = await getImageDimensions(compressed);
-      void sendImage(compressed, width, height);
-    } catch {
-      setImageError("画像の処理に失敗しました");
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file);
+        const { width, height } = await getImageDimensions(compressed);
+        void sendImage(compressed, width, height);
+      } catch {
+        setImageError("画像の処理に失敗しました");
+      }
     }
   }
 
@@ -483,6 +493,7 @@ export default function ChatRoom({
         currentUserId={currentUserId}
         ttlHours={ttlHours}
         friendLastReadAt={friendLastReadAt}
+        unreadBoundary={myLastReadAtBeforeOpen}
         onReact={react}
         onUnsend={unsend}
         onRetry={retry}
@@ -498,7 +509,7 @@ export default function ChatRoom({
         )}
       </div>
 
-      <Composer onSendText={sendText} onSendImage={handleSendImage} onTyping={notifyTyping} error={imageError} />
+      <Composer onSendText={sendText} onSendImages={handleSendImages} onTyping={notifyTyping} error={imageError} />
     </div>
   );
 }

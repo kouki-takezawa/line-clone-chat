@@ -1,39 +1,76 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 
 const MAX_MESSAGE_LENGTH = 1000;
 
 type Props = {
   onSendText: (text: string) => void;
-  onSendImage: (file: File) => void;
+  onSendImages: (files: File[]) => void;
   onTyping: () => void;
   error: string | null;
 };
 
-export default function Composer({ onSendText, onSendImage, onTyping, error }: Props) {
+export default function Composer({ onSendText, onSendImages, onTyping, error }: Props) {
   const [body, setBody] = useState("");
+  const [locating, setLocating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  function resizeTextarea() {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }
+
+  function submit() {
     const text = body.trim();
     if (!text) return;
     onSendText(text);
     setBody("");
+    requestAnimationFrame(resizeTextarea);
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    submit();
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends, Shift+Enter (or IME composition) inserts a newline —
+    // matches LINE's own input behavior instead of always requiring a tap.
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      submit();
+    }
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
-    onSendImage(file);
+    if (files.length === 0) return;
+    onSendImages(files);
+  }
+
+  function shareLocation() {
+    if (!("geolocation" in navigator)) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const { latitude, longitude } = pos.coords;
+        onSendText(`現在地: https://www.google.com/maps?q=${latitude},${longitude}`);
+      },
+      () => setLocating(false),
+      { timeout: 10000 },
+    );
   }
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative flex items-center gap-2 border-t border-black/10 p-3 dark:border-white/10"
+      className="relative flex items-end gap-2 border-t border-black/10 p-3 dark:border-white/10"
     >
       <button
         type="button"
@@ -43,23 +80,36 @@ export default function Composer({ onSendText, onSendImage, onTyping, error }: P
       >
         📷
       </button>
+      <button
+        type="button"
+        onClick={shareLocation}
+        disabled={locating}
+        aria-label="現在地を送信"
+        className="shrink-0 rounded-full border border-black/15 px-3 py-2 text-lg disabled:opacity-50 dark:border-white/20"
+      >
+        📍
+      </button>
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
-      <input
-        type="text"
+      <textarea
+        ref={textareaRef}
+        rows={1}
         value={body}
         onChange={(e) => {
           setBody(e.target.value);
           onTyping();
+          resizeTextarea();
         }}
+        onKeyDown={handleKeyDown}
         placeholder="メッセージを入力"
         maxLength={MAX_MESSAGE_LENGTH}
-        className="flex-1 rounded-full border border-black/15 px-4 py-2 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
+        className="max-h-[120px] flex-1 resize-none rounded-2xl border border-black/15 px-4 py-2 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
       />
       <button
         type="submit"

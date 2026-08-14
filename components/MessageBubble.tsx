@@ -10,6 +10,7 @@ type Props = {
   message: PendingMessage;
   isOwn: boolean;
   isRead: boolean;
+  showSenderName: boolean;
   reactions: MessageReaction[];
   currentUserId: string;
   ttlHours: number;
@@ -32,6 +33,28 @@ function formatRemaining(ttlHours: number, createdAt: string, now: number): stri
   return `残り${totalMinutes}分`;
 }
 
+const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+
+function linkify(text: string, linkClassName: string) {
+  const parts = text.split(URL_PATTERN);
+  return parts.map((part, i) =>
+    part.match(URL_PATTERN) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`underline ${linkClassName}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  );
+}
+
 function groupReactions(
   reactions: MessageReaction[],
   currentUserId: string,
@@ -50,6 +73,7 @@ export default function MessageBubble({
   message,
   isOwn,
   isRead,
+  showSenderName,
   reactions,
   currentUserId,
   ttlHours,
@@ -122,7 +146,7 @@ export default function MessageBubble({
   return (
     <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"} flex flex-col gap-1`}>
-        {!isOwn && (
+        {!isOwn && showSenderName && (
           <span className="text-xs text-black/50 dark:text-white/50">
             {message.sender.avatar_emoji} {message.sender.display_name}
           </span>
@@ -156,7 +180,11 @@ export default function MessageBubble({
                 読み込み中...
               </div>
             ))}
-          {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
+          {message.body && (
+            <p className="whitespace-pre-wrap break-words">
+              {linkify(message.body, isOwn ? "text-white" : "text-blue-600 dark:text-blue-400")}
+            </p>
+          )}
         </div>
 
         {grouped.length > 0 && (

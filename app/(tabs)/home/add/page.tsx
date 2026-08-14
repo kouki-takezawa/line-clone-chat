@@ -15,6 +15,7 @@ export default function AddFriendPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<FoundProfile | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +128,9 @@ export default function AddFriendPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from("friend_requests").insert({ from_user: user.id, to_user: found.id });
+    const { error } = await supabase
+      .from("friend_requests")
+      .insert({ from_user: user.id, to_user: found.id, message: requestMessage.trim() || null });
     setSending(false);
     if (error) {
       setError(
@@ -218,17 +221,29 @@ export default function AddFriendPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           {found && (
-            <div className="flex items-center gap-3 rounded-xl border border-black/10 p-4 dark:border-white/10">
-              <Avatar profile={found} />
-              <span className="flex-1 font-medium">{found.display_name}</span>
+            <div className="space-y-3 rounded-xl border border-black/10 p-4 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <Avatar profile={found} />
+                <span className="flex-1 font-medium">{found.display_name}</span>
+              </div>
+              {!sent && (
+                <input
+                  type="text"
+                  value={requestMessage}
+                  onChange={(e) => setRequestMessage(e.target.value)}
+                  placeholder="ひとことメッセージ（任意）"
+                  maxLength={200}
+                  className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:bg-neutral-900 dark:focus:border-white/50"
+                />
+              )}
               {sent ? (
-                <span className="text-sm text-black/50 dark:text-white/50">申請済み</span>
+                <span className="block text-sm text-black/50 dark:text-white/50">申請済み</span>
               ) : (
                 <button
                   type="button"
                   onClick={sendRequest}
                   disabled={sending}
-                  className="shrink-0 rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  className="w-full rounded-full bg-[#06C755] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {sending ? "送信中..." : "友達申請を送る"}
                 </button>

@@ -72,6 +72,7 @@ export default async function TalkPage({
       ttlHours={settings?.ttl_hours ?? 24}
       initialFriendLastReadAt={friendRow?.last_read_at ?? null}
       initialMuted={myRow?.muted ?? false}
+      initialMyLastReadAt={myRow?.last_read_at ?? null}
     />
   );
 }

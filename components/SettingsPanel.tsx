@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { compressImage } from "@/lib/image";
 import { avatarColorFor } from "@/lib/avatarColor";
 import NotificationToggle from "@/components/NotificationToggle";
+import Avatar from "@/components/Avatar";
+import type { Profile } from "@/lib/types";
 
 type Props = {
   currentUserId: string;
@@ -14,6 +16,9 @@ type Props = {
   avatarEmoji: string;
   avatarUrl: string | null;
   ttlHours: number;
+  showNotificationPreview: boolean;
+  blockedFriends: { blocked_id: string; blocked: Profile }[];
+  removedFriends: { roomId: string; friend: Profile }[];
 };
 
 export default function SettingsPanel({
@@ -23,6 +28,9 @@ export default function SettingsPanel({
   avatarEmoji,
   avatarUrl: initialAvatarUrl,
   ttlHours,
+  showNotificationPreview: initialShowPreview,
+  blockedFriends: initialBlockedFriends,
+  removedFriends: initialRemovedFriends,
 }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +45,11 @@ export default function SettingsPanel({
   const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
+
+  const [showPreview, setShowPreview] = useState(initialShowPreview);
+  const [blockedFriends, setBlockedFriends] = useState(initialBlockedFriends);
+  const [removedFriends, setRemovedFriends] = useState(initialRemovedFriends);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -106,7 +119,47 @@ export default function SettingsPanel({
     setPasswordSaved(true);
   }
 
+  async function toggleNotificationPreview() {
+    const next = !showPreview;
+    setShowPreview(next);
+    const supabase = createClient();
+    await supabase.from("profiles").update({ show_notification_preview: next }).eq("id", currentUserId);
+  }
+
+  async function unblock(blockedId: string) {
+    setBlockedFriends((prev) => prev.filter((b) => b.blocked_id !== blockedId));
+    const supabase = createClient();
+    await supabase.from("blocks").delete().eq("blocker_id", currentUserId).eq("blocked_id", blockedId);
+  }
+
+  async function restoreFriend(roomId: string, friendId: string) {
+    setRemovedFriends((prev) => prev.filter((r) => r.friend.id !== friendId));
+    const supabase = createClient();
+    await supabase
+      .from("room_members")
+      .update({ friend_removed: false })
+      .eq("room_id", roomId)
+      .eq("user_id", currentUserId);
+  }
+
   async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
+  async function handleDeleteAccount() {
+    if (!window.confirm("本当に退会しますか？すべてのデータが削除され、元に戻せません。")) return;
+    if (!window.confirm("最終確認: アカウントを完全に削除します。よろしいですか？")) return;
+
+    setDeletingAccount(true);
+    setError(null);
+    const res = await fetch("/api/account/delete", { method: "POST" });
+    if (!res.ok) {
+      setDeletingAccount(false);
+      setError("退会処理に失敗しました");
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");
@@ -207,6 +260,15 @@ export default function SettingsPanel({
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">通知</h2>
           <NotificationToggle currentUserId={currentUserId} />
+          <label className="flex items-center justify-between rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+            <span>
+              通知にメッセージ内容を表示
+              <span className="block text-xs text-black/40 dark:text-white/40">
+                OFFにすると「新着メッセージ」とだけ表示されます
+              </span>
+            </span>
+            <input type="checkbox" checked={showPreview} onChange={toggleNotificationPreview} className="shrink-0" />
+          </label>
         </section>
 
         <section className="space-y-1">
@@ -216,12 +278,74 @@ export default function SettingsPanel({
           </p>
         </section>
 
+        {removedFriends.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold">削除した友達</h2>
+            <ul className="space-y-2">
+              {removedFriends.map(({ roomId, friend }) => (
+                <li
+                  key={friend.id}
+                  className="flex items-center gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10"
+                >
+                  <Avatar profile={friend} />
+                  <span className="flex-1 font-medium">{friend.display_name}</span>
+                  <button
+                    type="button"
+                    onClick={() => restoreFriend(roomId, friend.id)}
+                    className="rounded-full border border-black/15 px-3 py-1.5 text-sm dark:border-white/20"
+                  >
+                    復元
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {blockedFriends.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold">ブロック中の友達</h2>
+            <ul className="space-y-2">
+              {blockedFriends.map(({ blocked_id, blocked }) => (
+                <li
+                  key={blocked_id}
+                  className="flex items-center gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10"
+                >
+                  <Avatar profile={blocked} />
+                  <span className="flex-1 font-medium">{blocked.display_name}</span>
+                  <button
+                    type="button"
+                    onClick={() => unblock(blocked_id)}
+                    className="rounded-full border border-black/15 px-3 py-1.5 text-sm dark:border-white/20"
+                  >
+                    解除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section>
           <button
             onClick={handleSignOut}
             className="w-full rounded-full border border-black/15 px-4 py-2 text-sm text-black/60 dark:border-white/20 dark:text-white/60"
           >
             ログアウト
+          </button>
+        </section>
+
+        <section className="space-y-2 border-t border-black/10 pt-6 dark:border-white/10">
+          <h2 className="text-sm font-semibold text-red-600">退会</h2>
+          <p className="text-xs text-black/50 dark:text-white/50">
+            アカウントとすべてのデータ（プロフィール・友達関係・メッセージ）が完全に削除されます。この操作は元に戻せません。
+          </p>
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount}
+            className="w-full rounded-full border border-red-300 px-4 py-2 text-sm text-red-600 disabled:opacity-50 dark:border-red-900"
+          >
+            {deletingAccount ? "処理中..." : "退会する"}
           </button>
         </section>
       </div>
