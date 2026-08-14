@@ -3,6 +3,7 @@ export type Profile = {
   display_name: string;
   avatar_emoji: string;
   avatar_url: string | null;
+  friend_code: string;
   created_at: string;
 };
 
@@ -18,7 +19,44 @@ export type RoomMember = {
   joined_at: string;
   pinned: boolean;
   talk_hidden: boolean;
+  friend_removed: boolean;
 };
+
+export type FriendRequest = {
+  id: string;
+  from_user: string;
+  to_user: string;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+  responded_at: string | null;
+};
+
+export type Block = {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+// Rows returned by the find_profile_by_code / list_*_friend_requests RPCs
+// (SECURITY DEFINER functions that can see profiles the caller's own RLS
+// grants wouldn't otherwise expose).
+export type FoundProfile = {
+  id: string;
+  display_name: string;
+  avatar_emoji: string;
+  avatar_url: string | null;
+};
+
+type RequestProfileFields = {
+  display_name: string;
+  avatar_emoji: string;
+  avatar_url: string | null;
+  created_at: string;
+};
+
+// id here is the friend_requests row's own id, not the other user's profile id.
+export type IncomingFriendRequest = RequestProfileFields & { id: string; from_user: string };
+export type OutgoingFriendRequest = RequestProfileFields & { id: string; to_user: string };
 
 export type Message = {
   id: string;
@@ -89,9 +127,38 @@ export type Database = {
         Update: Partial<Settings>;
         Relationships: [];
       };
+      friend_requests: {
+        Row: FriendRequest;
+        Insert: Partial<FriendRequest> & { from_user: string; to_user: string };
+        Update: Partial<FriendRequest>;
+        Relationships: [];
+      };
+      blocks: {
+        Row: Block;
+        Insert: Partial<Block> & { blocker_id: string; blocked_id: string };
+        Update: Partial<Block>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      find_profile_by_code: {
+        Args: { code: string };
+        Returns: FoundProfile[];
+      };
+      list_incoming_friend_requests: {
+        Args: Record<string, never>;
+        Returns: IncomingFriendRequest[];
+      };
+      list_outgoing_friend_requests: {
+        Args: Record<string, never>;
+        Returns: OutgoingFriendRequest[];
+      };
+      accept_friend_request: {
+        Args: { request_id: string };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
