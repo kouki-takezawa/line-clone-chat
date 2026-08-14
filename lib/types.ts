@@ -69,6 +69,13 @@ export type Message = {
   created_at: string;
 };
 
+export type MessageReaction = {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+};
+
 export type PushSubscriptionRow = {
   id: string;
   user_id: string;
@@ -137,6 +144,12 @@ export type Database = {
         Row: Block;
         Insert: Partial<Block> & { blocker_id: string; blocked_id: string };
         Update: Partial<Block>;
+        Relationships: [];
+      };
+      message_reactions: {
+        Row: MessageReaction;
+        Insert: Partial<MessageReaction> & { message_id: string; user_id: string; emoji: string };
+        Update: Partial<MessageReaction>;
         Relationships: [];
       };
     };

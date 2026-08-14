@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ChatRoom from "@/components/ChatRoom";
-import type { MessageWithSender, Profile } from "@/lib/types";
+import type { MessageReaction, MessageWithSender, Profile } from "@/lib/types";
 
 export default async function TalkPage({
   params,
@@ -28,7 +28,9 @@ export default async function TalkPage({
     supabase.from("room_members").select("profile:profiles(*)").eq("room_id", roomId),
     supabase
       .from("messages")
-      .select("*, sender:profiles(*)")
+      // profiles is ambiguous from messages since message_reactions added a
+      // second (indirect) path to it — must name the FK explicitly.
+      .select("*, sender:profiles!messages_sender_id_fkey(*)")
       .eq("room_id", roomId)
       .order("created_at", { ascending: true }),
     supabase.from("settings").select("ttl_hours").eq("id", true).single(),
@@ -42,6 +44,12 @@ export default async function TalkPage({
   const friend = members.find((m) => m.id !== user.id);
   if (!friend) notFound();
 
+  const messageIds = (messages ?? []).map((m) => m.id);
+  const { data: reactions } =
+    messageIds.length > 0
+      ? await supabase.from("message_reactions").select("*").in("message_id", messageIds)
+      : { data: [] as MessageReaction[] };
+
   return (
     <ChatRoom
       roomId={roomId}
@@ -49,6 +57,7 @@ export default async function TalkPage({
       friend={friend}
       members={members}
       initialMessages={(messages as unknown as MessageWithSender[]) ?? []}
+      initialReactions={reactions ?? []}
       ttlHours={settings?.ttl_hours ?? 24}
     />
   );
