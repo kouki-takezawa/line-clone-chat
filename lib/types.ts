@@ -173,6 +173,10 @@ export type Database = {
         Args: { request_id: string };
         Returns: string;
       };
+      count_unread_messages: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

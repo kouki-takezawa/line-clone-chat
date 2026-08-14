@@ -117,18 +117,27 @@ export default function ChatRoom({
         .from("room_members")
         .update({ last_read_at: new Date().toISOString() })
         .eq("room_id", roomId)
-        .eq("user_id", currentUserId);
+        .eq("user_id", currentUserId)
+        .then(() => {
+          // The badge count comes from this RPC (real unread rows in the
+          // DB), not from counting ServiceWorkerRegistration.getNotifications()
+          // — iOS Safari's Web Push implementation doesn't reliably keep
+          // that in sync with what's actually in the OS notification
+          // center, which left the badge stuck at a stale number.
+          void supabase.rpc("count_unread_messages").then(({ data }) => {
+            if (typeof data === "number") void syncAppBadge(data);
+          });
+        });
 
-      // Dismiss this room's own OS notification and recompute the app
-      // badge from whatever's left showing — not a blind clear-to-0, since
-      // another still-unread conversation may have its own notification up.
+      // Best-effort: dismiss this room's own OS notification banner. Not
+      // relied on for the badge *number* above, since closing a
+      // notification object doesn't always reflect back to the actual
+      // notification center on every platform.
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistration().then(async (registration) => {
           if (!registration) return;
           const own = await registration.getNotifications({ tag: `chat-${roomId}` });
           own.forEach((n) => n.close());
-          const remaining = await registration.getNotifications();
-          void syncAppBadge(remaining.length);
         });
       }
 
