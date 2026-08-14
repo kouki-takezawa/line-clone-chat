@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { RoomSummary } from "@/lib/types";
 import SwipeableRow from "@/components/SwipeableRow";
 import Avatar from "@/components/Avatar";
+import BadgeSync from "@/components/BadgeSync";
 
 type Props = {
   rooms: RoomSummary[];
@@ -58,6 +59,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <BadgeSync unreadCount={rooms.reduce((sum, r) => sum + r.unreadCount, 0)} />
       <header className="border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950">
         <h1 className="text-lg font-semibold">トーク</h1>
       </header>

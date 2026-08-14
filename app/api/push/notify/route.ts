@@ -8,7 +8,7 @@ type NotifyBody =
   | { type: "message"; roomId: string; body: string }
   | { type: "friend_request"; toUserId: string };
 
-async function sendToUser(userId: string, title: string, body: string) {
+async function sendToUser(userId: string, title: string, body: string, roomId?: string) {
   const admin = createAdminClient();
   const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", userId);
   if (!subs || subs.length === 0) return;
@@ -18,7 +18,7 @@ async function sendToUser(userId: string, title: string, body: string) {
   if (!vapidPrivateKey || !vapidPublicKey) return;
   webpush.setVapidDetails("mailto:support@example.com", vapidPublicKey, vapidPrivateKey);
 
-  const payload = JSON.stringify({ title, body });
+  const payload = JSON.stringify({ title, body, roomId });
   await Promise.all(
     (subs as PushSubscriptionRow[]).map(async (sub) => {
       try {
@@ -68,7 +68,12 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    await sendToUser(recipient.user_id, senderProfile?.display_name ?? "新着メッセージ", body.body.slice(0, 200));
+    await sendToUser(
+      recipient.user_id,
+      senderProfile?.display_name ?? "新着メッセージ",
+      body.body.slice(0, 200),
+      body.roomId,
+    );
     return NextResponse.json({ ok: true });
   }
 

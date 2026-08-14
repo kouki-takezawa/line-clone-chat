@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, getImageDimensions } from "@/lib/image";
+import { syncAppBadge } from "@/lib/badge";
 import type { Message, MessageReaction, MessageWithSender, Profile, RoomMember } from "@/lib/types";
 import MessageList from "@/components/MessageList";
 import Composer from "@/components/Composer";
@@ -117,6 +118,19 @@ export default function ChatRoom({
         .update({ last_read_at: new Date().toISOString() })
         .eq("room_id", roomId)
         .eq("user_id", currentUserId);
+
+      // Dismiss this room's own OS notification and recompute the app
+      // badge from whatever's left showing — not a blind clear-to-0, since
+      // another still-unread conversation may have its own notification up.
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistration().then(async (registration) => {
+          if (!registration) return;
+          const own = await registration.getNotifications({ tag: `chat-${roomId}` });
+          own.forEach((n) => n.close());
+          const remaining = await registration.getNotifications();
+          void syncAppBadge(remaining.length);
+        });
+      }
 
       channel = supabase
         .channel(`room:${roomId}`)
