@@ -10,6 +10,7 @@ type Props = {
   reactions: Record<string, MessageReaction[]>;
   currentUserId: string;
   ttlHours: number;
+  friendLastReadAt: string | null;
   onReact: (messageId: string, emoji: string) => void;
   onUnsend: (messageId: string) => void;
   onRetry: (message: PendingMessage) => void;
@@ -23,6 +24,7 @@ export default function MessageList({
   reactions,
   currentUserId,
   ttlHours,
+  friendLastReadAt,
   onReact,
   onUnsend,
   onRetry,
@@ -57,6 +59,24 @@ export default function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
+  // Only the most recent own message the friend has read gets the "既読"
+  // label, matching LINE — not every read message, which would just be
+  // visual noise once several have been seen.
+  let lastReadOwnIndex = -1;
+  if (friendLastReadAt) {
+    // Date comparison, not string comparison: created_at and
+    // friendLastReadAt can arrive via different serialization paths (REST
+    // vs. the realtime WAL stream vs. a client-side toISOString() call)
+    // that don't always produce byte-identical ISO formats even for the
+    // same instant (e.g. "Z" vs "+00:00", differing fractional digits).
+    const readCutoff = new Date(friendLastReadAt).getTime();
+    messages.forEach((m, i) => {
+      if (m.sender_id === currentUserId && !m.status && new Date(m.created_at).getTime() <= readCutoff) {
+        lastReadOwnIndex = i;
+      }
+    });
+  }
+
   return (
     <div className="relative min-h-0 flex-1">
       <div
@@ -69,11 +89,12 @@ export default function MessageList({
             24時間が経過するとメッセージは自動的に削除されます。新しいメッセージを送ってみましょう！
           </p>
         )}
-        {messages.map((message) => (
+        {messages.map((message, i) => (
           <MessageBubble
             key={message.id}
             message={message}
             isOwn={message.sender_id === currentUserId}
+            isRead={i === lastReadOwnIndex}
             reactions={reactions[message.id] ?? []}
             currentUserId={currentUserId}
             ttlHours={ttlHours}

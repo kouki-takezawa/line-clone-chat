@@ -138,6 +138,11 @@ export default function AddFriendPage() {
       return;
     }
     setSent(true);
+    fetch("/api/push/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "friend_request", toUserId: found.id }),
+    }).catch(() => {});
   }
 
   return (

@@ -20,6 +20,8 @@ export type RoomMember = {
   pinned: boolean;
   talk_hidden: boolean;
   friend_removed: boolean;
+  last_read_at: string;
+  muted: boolean;
 };
 
 export type FriendRequest = {
@@ -187,4 +189,6 @@ export type RoomSummary = {
   friend: Profile;
   lastMessage: Message | null;
   pinned: boolean;
+  muted: boolean;
+  unreadCount: number;
 };

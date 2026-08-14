@@ -25,7 +25,10 @@ export default async function TalkPage({
   // empty and "friend" ends up undefined below — same 404 outcome, one
   // fewer round trip.
   const [{ data: memberRowsRaw }, { data: messages }, { data: settings }] = await Promise.all([
-    supabase.from("room_members").select("profile:profiles(*)").eq("room_id", roomId),
+    supabase
+      .from("room_members")
+      .select("user_id, last_read_at, muted, profile:profiles(*)")
+      .eq("room_id", roomId),
     supabase
       .from("messages")
       // profiles is ambiguous from messages since message_reactions added a
@@ -35,7 +38,12 @@ export default async function TalkPage({
       .order("created_at", { ascending: true }),
     supabase.from("settings").select("ttl_hours").eq("id", true).single(),
   ]);
-  const memberRows = memberRowsRaw as unknown as Array<{ profile: Profile | null }> | null;
+  const memberRows = memberRowsRaw as unknown as Array<{
+    user_id: string;
+    last_read_at: string;
+    muted: boolean;
+    profile: Profile | null;
+  }> | null;
 
   const members = (memberRows ?? [])
     .map((row) => row.profile)
@@ -43,6 +51,9 @@ export default async function TalkPage({
 
   const friend = members.find((m) => m.id !== user.id);
   if (!friend) notFound();
+
+  const myRow = memberRows?.find((row) => row.user_id === user.id);
+  const friendRow = memberRows?.find((row) => row.user_id === friend.id);
 
   const messageIds = (messages ?? []).map((m) => m.id);
   const { data: reactions } =
@@ -59,6 +70,8 @@ export default async function TalkPage({
       initialMessages={(messages as unknown as MessageWithSender[]) ?? []}
       initialReactions={reactions ?? []}
       ttlHours={settings?.ttl_hours ?? 24}
+      initialFriendLastReadAt={friendRow?.last_read_at ?? null}
+      initialMuted={myRow?.muted ?? false}
     />
   );
 }

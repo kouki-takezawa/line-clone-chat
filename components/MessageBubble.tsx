@@ -9,6 +9,7 @@ import ImageLightbox from "@/components/ImageLightbox";
 type Props = {
   message: PendingMessage;
   isOwn: boolean;
+  isRead: boolean;
   reactions: MessageReaction[];
   currentUserId: string;
   ttlHours: number;
@@ -48,6 +49,7 @@ function groupReactions(
 export default function MessageBubble({
   message,
   isOwn,
+  isRead,
   reactions,
   currentUserId,
   ttlHours,
@@ -189,7 +191,8 @@ export default function MessageBubble({
             </button>
           </div>
         ) : (
-          <span className="text-[10px] text-black/40 dark:text-white/40">
+          <span className="flex items-center gap-1 text-[10px] text-black/40 dark:text-white/40">
+            {isOwn && isRead && <span className="text-[#06C755]">既読</span>}
             {time}
             {message.status !== "pending" && ` · ${formatRemaining(ttlHours, message.created_at, now)}`}
           </span>

@@ -90,6 +90,7 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1">
                       {room.pinned && <span className="text-xs">📌</span>}
+                      {room.muted && <span className="text-xs">🔕</span>}
                       <span className="flex-1 truncate font-medium">{room.friend.display_name}</span>
                       <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
                         {room.lastMessage ? formatTime(room.lastMessage.created_at) : ""}
@@ -99,6 +100,11 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
                       {lastMessageLabel(room.lastMessage)}
                     </span>
                   </span>
+                  {room.unreadCount > 0 && (
+                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#06C755] px-1.5 text-xs font-medium text-white">
+                      {room.unreadCount > 99 ? "99+" : room.unreadCount}
+                    </span>
+                  )}
                 </div>
               </SwipeableRow>
             </li>

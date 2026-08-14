@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, getImageDimensions } from "@/lib/image";
-import type { Message, MessageReaction, MessageWithSender, Profile } from "@/lib/types";
+import type { Message, MessageReaction, MessageWithSender, Profile, RoomMember } from "@/lib/types";
 import MessageList from "@/components/MessageList";
 import Composer from "@/components/Composer";
 import Avatar from "@/components/Avatar";
@@ -26,7 +26,19 @@ type Props = {
   initialReactions: MessageReaction[];
   members: Profile[];
   ttlHours: number;
+  initialFriendLastReadAt: string | null;
+  initialMuted: boolean;
 };
+
+// Fire-and-forget: push delivery is a nicety, never something that should
+// block or fail the send itself.
+function notifyPush(body: { type: "message"; roomId: string; body: string }) {
+  fetch("/api/push/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
 
 function describeError(error: { message: string }, fallback: string): string {
   if (error.message.includes("rate limit")) {
@@ -48,6 +60,8 @@ export default function ChatRoom({
   initialReactions,
   members,
   ttlHours,
+  initialFriendLastReadAt,
+  initialMuted,
 }: Props) {
   const [messages, setMessages] = useState<PendingMessage[]>(initialMessages);
   const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>(() => {
@@ -59,6 +73,9 @@ export default function ChatRoom({
   });
   const [imageError, setImageError] = useState<string | null>(null);
   const [friendTyping, setFriendTyping] = useState(false);
+  const [friendLastReadAt, setFriendLastReadAt] = useState(initialFriendLastReadAt);
+  const [muted, setMuted] = useState(initialMuted);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
 
   const membersRef = useRef(members);
   const messageIdsRef = useRef(new Set(initialMessages.map((m) => m.id)));
@@ -85,13 +102,21 @@ export default function ChatRoom({
     let channel: RealtimeChannel | null = null;
 
     // createBrowserClient's session is restored from cookies asynchronously
-    // on a fresh page load. Subscribing before that finishes registers the
-    // channel without a valid access token, and it silently never receives
-    // postgres_changes events afterward (a later token refresh doesn't
-    // retroactively fix an already-broken subscription) — so this must wait
-    // for the session before calling .subscribe().
+    // on a fresh page load. Any authenticated call issued before that
+    // finishes — the mark-as-read update below included — silently runs as
+    // anon and gets filtered to 0 rows by RLS instead of erroring, and a
+    // realtime subscribe made too early registers with no valid access
+    // token and never receives postgres_changes events afterward (a later
+    // token refresh doesn't retroactively fix an already-broken
+    // subscription) — so everything here waits for the session first.
     supabase.auth.getSession().then(() => {
       if (cancelled) return;
+
+      void supabase
+        .from("room_members")
+        .update({ last_read_at: new Date().toISOString() })
+        .eq("room_id", roomId)
+        .eq("user_id", currentUserId);
 
       channel = supabase
         .channel(`room:${roomId}`)
@@ -107,6 +132,26 @@ export default function ChatRoom({
                 ? prev.map((m) => (m.id === row.id ? { ...row, sender } : m))
                 : [...prev, { ...row, sender }],
             );
+            // The talk is open right now, so a message arriving from the
+            // friend counts as read immediately — no separate "mark as
+            // read" action for the viewer to take.
+            if (row.sender_id !== currentUserId) {
+              const client = createClient();
+              void client
+                .from("room_members")
+                .update({ last_read_at: new Date().toISOString() })
+                .eq("room_id", roomId)
+                .eq("user_id", currentUserId);
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` },
+          (payload) => {
+            const row = payload.new as RoomMember;
+            if (row.user_id !== friend.id) return;
+            setFriendLastReadAt(row.last_read_at);
           },
         )
         .on(
@@ -179,7 +224,7 @@ export default function ChatRoom({
       channelRef.current = null;
       if (typingClearRef.current) clearTimeout(typingClearRef.current);
     };
-  }, [roomId, currentUserId]);
+  }, [roomId, currentUserId, friend.id]);
 
   const sendText = useCallback(
     async (text: string) => {
@@ -213,6 +258,8 @@ export default function ChatRoom({
         setMessages((prev) =>
           prev.map((m) => (m.id === clientId ? { ...m, status: "failed", errorMessage } : m)),
         );
+      } else {
+        notifyPush({ type: "message", roomId, body: text });
       }
     },
     [roomId, currentUserId],
@@ -258,6 +305,7 @@ export default function ChatRoom({
           image_height: height,
         });
         if (insertError) throw insertError;
+        notifyPush({ type: "message", roomId, body: "画像を送信しました" });
       } catch (err) {
         const errorMessage =
           err instanceof Error ? describeError(err, "画像の送信に失敗しました") : "画像の送信に失敗しました";
@@ -332,6 +380,18 @@ export default function ChatRoom({
       .upsert({ message_id: messageId, user_id: currentUserId, emoji });
   }
 
+  async function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    setHeaderMenuOpen(false);
+    const supabase = createClient();
+    await supabase
+      .from("room_members")
+      .update({ muted: next })
+      .eq("room_id", roomId)
+      .eq("user_id", currentUserId);
+  }
+
   function notifyTyping() {
     const now = Date.now();
     if (now - lastTypingSentRef.current < 2000) return;
@@ -360,7 +420,7 @@ export default function ChatRoom({
     // message list would grow the whole page instead of scrolling inside
     // MessageList — dragging the header and composer along with it.
     <div className="fixed inset-0 flex flex-col bg-white dark:bg-neutral-950">
-      <header className="flex items-center gap-3 border-b border-black/10 bg-white px-2 py-3 dark:border-white/10 dark:bg-neutral-950">
+      <header className="relative flex items-center gap-3 border-b border-black/10 bg-white px-2 py-3 dark:border-white/10 dark:bg-neutral-950">
         <Link
           href="/chat"
           aria-label="トーク一覧に戻る"
@@ -369,7 +429,29 @@ export default function ChatRoom({
           ←
         </Link>
         <Avatar profile={friend} size="h-9 w-9" />
-        <h1 className="truncate text-base font-semibold">{friend.display_name}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{friend.display_name}</h1>
+        <button
+          type="button"
+          onClick={() => setHeaderMenuOpen((v) => !v)}
+          aria-label="メニュー"
+          className="rounded-full p-2 text-xl leading-none text-black active:bg-black/5 dark:text-white dark:active:bg-white/10"
+        >
+          ⋮
+        </button>
+        {headerMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setHeaderMenuOpen(false)} />
+            <div className="absolute right-2 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-neutral-900">
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="w-full px-4 py-3 text-left text-sm active:bg-black/5 dark:active:bg-white/10"
+              >
+                {muted ? "🔔 ミュート解除" : "🔕 ミュートする"}
+              </button>
+            </div>
+          </>
+        )}
       </header>
 
       <MessageList
@@ -377,6 +459,7 @@ export default function ChatRoom({
         reactions={reactions}
         currentUserId={currentUserId}
         ttlHours={ttlHours}
+        friendLastReadAt={friendLastReadAt}
         onReact={react}
         onUnsend={unsend}
         onRetry={retry}

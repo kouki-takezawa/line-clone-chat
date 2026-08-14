@@ -8,6 +8,8 @@ type MemberRow = {
   user_id: string;
   pinned: boolean;
   talk_hidden: boolean;
+  muted: boolean;
+  last_read_at: string;
   profile: Profile | null;
 };
 
@@ -27,16 +29,26 @@ export default async function ChatListPage() {
   // so none of these queries need an explicit room_id filter — that lets
   // them run in a single parallel round trip.
   const [{ data: allMembersRaw }, { data: recentMessages }] = await Promise.all([
-    supabase.from("room_members").select("room_id, user_id, pinned, talk_hidden, profile:profiles(*)"),
+    supabase
+      .from("room_members")
+      .select("room_id, user_id, pinned, talk_hidden, muted, last_read_at, profile:profiles(*)"),
     supabase.from("messages").select("*").order("created_at", { ascending: false }).limit(200),
   ]);
   const allMembers = allMembersRaw as unknown as MemberRow[] | null;
 
   const friendByRoom = new Map<string, Profile>();
-  const myPrefsByRoom = new Map<string, { pinned: boolean; talk_hidden: boolean }>();
+  const myPrefsByRoom = new Map<
+    string,
+    { pinned: boolean; talk_hidden: boolean; muted: boolean; last_read_at: string }
+  >();
   for (const row of allMembers ?? []) {
     if (row.user_id === user.id) {
-      myPrefsByRoom.set(row.room_id, { pinned: row.pinned, talk_hidden: row.talk_hidden });
+      myPrefsByRoom.set(row.room_id, {
+        pinned: row.pinned,
+        talk_hidden: row.talk_hidden,
+        muted: row.muted,
+        last_read_at: row.last_read_at,
+      });
     } else if (row.profile) {
       friendByRoom.set(row.room_id, row.profile);
     }
@@ -45,8 +57,18 @@ export default async function ChatListPage() {
   // Messages arrive sorted newest-first, so the first occurrence per room is
   // already its most recent message.
   const lastByRoom = new Map<string, RoomSummary["lastMessage"]>();
+  const unreadCountByRoom = new Map<string, number>();
   for (const message of recentMessages ?? []) {
     if (!lastByRoom.has(message.room_id)) lastByRoom.set(message.room_id, message);
+    const myLastRead = myPrefsByRoom.get(message.room_id)?.last_read_at;
+    // Date comparison, not string comparison — see MessageList.tsx for why.
+    if (
+      message.sender_id !== user.id &&
+      myLastRead &&
+      new Date(message.created_at).getTime() > new Date(myLastRead).getTime()
+    ) {
+      unreadCountByRoom.set(message.room_id, (unreadCountByRoom.get(message.room_id) ?? 0) + 1);
+    }
   }
 
   const rooms: RoomSummary[] = [...friendByRoom.entries()]
@@ -56,6 +78,8 @@ export default async function ChatListPage() {
       friend,
       lastMessage: lastByRoom.get(roomId) ?? null,
       pinned: myPrefsByRoom.get(roomId)?.pinned ?? false,
+      muted: myPrefsByRoom.get(roomId)?.muted ?? false,
+      unreadCount: unreadCountByRoom.get(roomId) ?? 0,
     }))
     .sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
