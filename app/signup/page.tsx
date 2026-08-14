@@ -2,11 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export default function SignupPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -50,11 +52,15 @@ export default function SignupPage() {
       return;
     }
 
-    // With email confirmation required, signUp() succeeds but returns no
-    // session yet — the user must click the link in the confirmation email.
-    if (!data.session) {
-      setSent(true);
+    // With "Confirm email" off in Supabase, signUp() returns an active
+    // session immediately and there's nothing further for the user to do —
+    // go straight in. With it on, no session comes back yet and the user
+    // has to click the link in the confirmation email first.
+    if (data.session) {
+      router.replace("/chat");
+      return;
     }
+    setSent(true);
   }
 
   if (sent) {
