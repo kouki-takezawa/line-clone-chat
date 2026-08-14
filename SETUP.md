@@ -18,11 +18,9 @@ Supabase CLIのログインはブラウザ認証が必要で非対話環境で�
 
 Dashboard → Authentication → Settings → 「**Allow new users to sign up**」がONになっていることを確認する（誰でも登録できるオープンなアプリのため）。
 
-無料枠のSupabase組み込みメール送信は送信数がかなり少なく、動作確認中もすぐレート制限にかかる。この実害を避けるため、現状は **Dashboard → Authentication → Sign In / Providers → Email → 「Confirm email」をOFF** にする運用にしている（`app/signup/page.tsx`は、登録直後にセッションが返ってきた場合＝メール確認不要な場合はそのまま`/chat`へ遷移する作りになっている）。
+無料枠のSupabase組み込みメール送信は送信数がかなり少なく、動作確認中もすぐレート制限にかかる。また、この登録規模のダッシュボードには「Confirm email」に相当する個別トグルが見当たらないケースがある。そのため**登録処理自体をDashboardの設定に依存しない形**にしてある: `app/signup/page.tsx` はSupabaseの`auth.signUp()`を直接呼ばず、`app/api/signup/route.ts`（service role権限のAdmin API経由）でアカウントを`email_confirm: true`の状態であらかじめ作成し、その場でサインインさせてそのまま`/chat`へ入れる。確認メールの送信自体が発生しないため、SMTP周りの設定は一切不要。
 
 この方式は「他人のメールアドレスを名乗って登録される」余地を許容する代わりに、確認メール未達という運用上の詰まりを完全になくす選択。招待制（友達コード/QRでしか繋がれない）・決済情報なし・24時間で全メッセージ削除という設計上、実害は小さいと判断した上での運用方針（詳細は`SECURITY_AND_CAPACITY.md`参照）。
-
-将来的にメール確認を復活させたくなった場合は、上記トグルをONに戻し、あわせて **カスタムSMTP（例: Brevoの無料枠 300通/日、ドメイン不要）** を設定することを推奨する。
 
 ## 4. 24時間TTL purgeの有効化（Vault secret設定）
 
@@ -49,11 +47,13 @@ cp .env.local.example .env.local
 
 GitHubリポジトリをVercelにImportし、上記3つの環境変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）をProject Settings → Environment Variablesに設定してDeploy。以降は`main`にpushするたび自動デプロイされる。
 
-## 未実装（保留中）
+## 未実装（意図的にスコープ外）
 
-- 友達申請・QRコードによる友達追加（フェーズ2で実装予定。現状チャットルームは手動で作成したものしか存在しない）
-- 画像ライトボックス・メッセージ長押しメニュー・絵文字リアクション・入力中インジケーターなどのチャットUX強化（フェーズ3）
-- 既読表示・ミュート・未読バッジ・プッシュ通知の実配信（フェーズ4）。通知ON/OFFトグルのUIはあるが、実際の送信は未接続
+友達申請・QRコード追加・既読・ミュート・未読バッジ・プッシュ通知の実配信・画像ライトボックス・長押しメニュー・絵文字リアクション・入力中インジケーターなどは実装済み。以下は意図的に未実装（詳細な判断根拠は会話履歴のLINE比較分析を参照）:
+
+- グループチャット（データモデルが1:1前提のため、対応するなら別途大型フェーズが必要）
+- 音声・ビデオ通話
+- スタンプ、VOOM/タイムライン、LINE Pay、公式アカウント、メッセージ検索（24h TTLのため不要）、バックアップ/復元
 - `supabase/functions/purge-expired`（Edge Function版のTTL purge）は未使用。実際に動いているのはmigration 0009のSQL関数+pg_cron版
 
 ## 動作確認: TTL自動削除

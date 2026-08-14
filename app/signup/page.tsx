@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -14,7 +13,6 @@ export default function SignupPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,50 +28,20 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: displayName.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+    const res = await fetch("/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, displayName: displayName.trim() }),
     });
+    const data = await res.json();
     setLoading(false);
 
-    if (error) {
-      setError(
-        error.message.includes("already registered")
-          ? "このメールアドレスは既に登録されています"
-          : error.message.includes("registration limit")
-            ? "現在、新規登録の上限に達しています"
-            : "登録に失敗しました",
-      );
+    if (!res.ok) {
+      setError(data.error || "登録に失敗しました");
       return;
     }
 
-    // With "Confirm email" off in Supabase, signUp() returns an active
-    // session immediately and there's nothing further for the user to do —
-    // go straight in. With it on, no session comes back yet and the user
-    // has to click the link in the confirmation email first.
-    if (data.session) {
-      router.replace("/chat");
-      return;
-    }
-    setSent(true);
-  }
-
-  if (sent) {
-    return (
-      <main className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-sm space-y-3 rounded-2xl border border-black/10 p-6 text-center shadow-sm dark:border-white/10">
-          <h1 className="text-lg font-semibold">確認メールを送信しました</h1>
-          <p className="text-sm text-black/60 dark:text-white/60">
-            {email} 宛に確認メールを送信しました。メール内のリンクをクリックすると登録が完了します。
-          </p>
-        </div>
-      </main>
-    );
+    router.replace("/chat");
   }
 
   return (

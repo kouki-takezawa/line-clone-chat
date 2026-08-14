@@ -5,7 +5,15 @@ import { NextResponse, type NextRequest } from "next/server";
 // exactly when a session doesn't exist yet (email confirm) or only exists
 // as a short-lived recovery session (password reset) — they must never be
 // redirected away by the "no session -> /login" rule below.
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"];
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/auth/callback",
+  "/api/signup",
+];
 // Bounce an already-authenticated visitor straight to /chat instead of
 // showing them the login/signup form again.
 const AUTH_ENTRY_PATHS = ["/login", "/signup"];
