@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -17,6 +17,16 @@ type Props = {
 export default function HomeFriendList({ me, friends: initialFriends, pendingRequestCount }: Props) {
   const router = useRouter();
   const [friends, setFriends] = useState(initialFriends);
+
+  // See FriendList.tsx for why this is needed: SwipeableRow can't be a
+  // <Link>, so it misses Link's automatic prefetch.
+  useEffect(() => {
+    router.prefetch("/home/me");
+    for (const { roomId } of friends) {
+      router.prefetch(`/chat/${roomId}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friends.length]);
 
   async function removeFriend(roomId: string, friendId: string) {
     setFriends((prev) => prev.filter((f) => f.friend.id !== friendId));
@@ -64,9 +74,9 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-20">
-        {/* Your own account. Profile editing lives in 設定 now. */}
+        {/* Own profile preview — editing still lives in 設定, reached from there. */}
         <Link
-          href="/settings"
+          href="/home/me"
           className="flex w-full items-center gap-3 border-b border-black/5 px-4 py-3 text-left active:bg-black/5 dark:border-white/10 dark:active:bg-white/10"
         >
           <Avatar profile={me} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RoomSummary } from "@/lib/types";
@@ -36,6 +36,18 @@ function sortRooms(rooms: RoomSummary[]) {
 export default function FriendList({ rooms: initialRooms, currentUserId }: Props) {
   const router = useRouter();
   const [rooms, setRooms] = useState(initialRooms);
+
+  // SwipeableRow can't be a <Link> (it needs the whole row for pointer
+  // gestures), which means it misses out on Link's automatic
+  // viewport-based prefetch — so each room's chat page only started
+  // loading after the tap, not before. Prefetching explicitly on mount
+  // closes that gap and makes the transition feel instant.
+  useEffect(() => {
+    for (const room of rooms) {
+      router.prefetch(`/chat/${room.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms.length]);
 
   async function togglePin(roomId: string, pinned: boolean) {
     setRooms((prev) => sortRooms(prev.map((r) => (r.id === roomId ? { ...r, pinned: !pinned } : r))));
