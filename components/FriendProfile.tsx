@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Avatar from "@/components/Avatar";
+import SnsLinks from "@/components/SnsLinks";
+import { updateMyRoomMember } from "@/lib/roomMemberActions";
 import type { Profile } from "@/lib/types";
 
 type Props = {
@@ -30,12 +32,7 @@ export default function FriendProfile({ friend, roomId, currentUserId }: Props) 
 
   async function removeFriend() {
     if (!window.confirm("この友達を削除しますか？(自分の一覧からのみ削除されます)")) return;
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ friend_removed: true })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId);
+    await updateMyRoomMember(roomId, currentUserId, { friend_removed: true });
     router.push("/home");
   }
 
@@ -50,11 +47,7 @@ export default function FriendProfile({ friend, roomId, currentUserId }: Props) 
     if (!window.confirm("この友達をブロックしますか？お互いにメッセージが送れなくなります。")) return;
     await Promise.all([
       supabase.from("blocks").insert({ blocker_id: currentUserId, blocked_id: friend.id }),
-      supabase
-        .from("room_members")
-        .update({ friend_removed: true, talk_hidden: true })
-        .eq("room_id", roomId)
-        .eq("user_id", currentUserId),
+      updateMyRoomMember(roomId, currentUserId, { friend_removed: true, talk_hidden: true }),
     ]);
     router.push("/home");
   }
@@ -72,6 +65,7 @@ export default function FriendProfile({ friend, roomId, currentUserId }: Props) 
         <div className="flex flex-col items-center gap-3">
           <Avatar profile={friend} size="h-24 w-24" />
           <p className="text-xl font-semibold">{friend.display_name}</p>
+          <SnsLinks xHandle={friend.x_handle} instagramHandle={friend.instagram_handle} />
         </div>
 
         <div className="mt-8 flex flex-col gap-2">

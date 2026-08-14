@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { notifyFriendAccepted } from "@/lib/push-client";
 import Avatar from "@/components/Avatar";
 import type { IncomingFriendRequest, OutgoingFriendRequest } from "@/lib/types";
 
@@ -42,11 +43,7 @@ export default function FriendRequestsPage() {
     }
     setIncoming((prev) => prev?.filter((r) => r.id !== requestId) ?? null);
     setMessage("友達になりました！");
-    fetch("/api/push/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "friend_accepted", toUserId: fromUserId }),
-    }).catch(() => {});
+    notifyFriendAccepted(fromUserId);
   }
 
   async function reject(requestId: string) {

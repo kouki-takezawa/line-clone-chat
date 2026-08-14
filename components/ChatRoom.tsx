@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, getImageDimensions } from "@/lib/image";
 import { syncAppBadge } from "@/lib/badge";
+import { notifyMessage } from "@/lib/push-client";
+import { updateMyRoomMember } from "@/lib/roomMemberActions";
 import type { Message, MessageReaction, MessageWithSender, Profile, RoomMember } from "@/lib/types";
 import MessageList from "@/components/MessageList";
 import Composer from "@/components/Composer";
@@ -31,16 +33,6 @@ type Props = {
   initialMuted: boolean;
   initialMyLastReadAt: string | null;
 };
-
-// Fire-and-forget: push delivery is a nicety, never something that should
-// block or fail the send itself.
-function notifyPush(body: { type: "message"; roomId: string; body: string }) {
-  fetch("/api/push/notify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }).catch(() => {});
-}
 
 function describeError(error: { message: string }, fallback: string): string {
   if (error.message.includes("rate limit")) {
@@ -120,21 +112,16 @@ export default function ChatRoom({
     supabase.auth.getSession().then(() => {
       if (cancelled) return;
 
-      void supabase
-        .from("room_members")
-        .update({ last_read_at: new Date().toISOString() })
-        .eq("room_id", roomId)
-        .eq("user_id", currentUserId)
-        .then(() => {
-          // The badge count comes from this RPC (real unread rows in the
-          // DB), not from counting ServiceWorkerRegistration.getNotifications()
-          // — iOS Safari's Web Push implementation doesn't reliably keep
-          // that in sync with what's actually in the OS notification
-          // center, which left the badge stuck at a stale number.
-          void supabase.rpc("count_unread_messages").then(({ data }) => {
-            if (typeof data === "number") void syncAppBadge(data);
-          });
+      void updateMyRoomMember(roomId, currentUserId, { last_read_at: new Date().toISOString() }).then(() => {
+        // The badge count comes from this RPC (real unread rows in the
+        // DB), not from counting ServiceWorkerRegistration.getNotifications()
+        // — iOS Safari's Web Push implementation doesn't reliably keep
+        // that in sync with what's actually in the OS notification
+        // center, which left the badge stuck at a stale number.
+        void supabase.rpc("count_unread_messages").then(({ data }) => {
+          if (typeof data === "number") void syncAppBadge(data);
         });
+      });
 
       // Best-effort: dismiss this room's own OS notification banner. Not
       // relied on for the badge *number* above, since closing a
@@ -166,12 +153,7 @@ export default function ChatRoom({
             // friend counts as read immediately — no separate "mark as
             // read" action for the viewer to take.
             if (row.sender_id !== currentUserId) {
-              const client = createClient();
-              void client
-                .from("room_members")
-                .update({ last_read_at: new Date().toISOString() })
-                .eq("room_id", roomId)
-                .eq("user_id", currentUserId);
+              void updateMyRoomMember(roomId, currentUserId, { last_read_at: new Date().toISOString() });
             }
           },
         )
@@ -289,7 +271,7 @@ export default function ChatRoom({
           prev.map((m) => (m.id === clientId ? { ...m, status: "failed", errorMessage } : m)),
         );
       } else {
-        notifyPush({ type: "message", roomId, body: text });
+        notifyMessage(roomId, text);
       }
     },
     [roomId, currentUserId],
@@ -335,7 +317,7 @@ export default function ChatRoom({
           image_height: height,
         });
         if (insertError) throw insertError;
-        notifyPush({ type: "message", roomId, body: "画像を送信しました" });
+        notifyMessage(roomId, "画像を送信しました");
       } catch (err) {
         const errorMessage =
           err instanceof Error ? describeError(err, "画像の送信に失敗しました") : "画像の送信に失敗しました";
@@ -414,12 +396,7 @@ export default function ChatRoom({
     const next = !muted;
     setMuted(next);
     setHeaderMenuOpen(false);
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ muted: next })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId);
+    await updateMyRoomMember(roomId, currentUserId, { muted: next });
   }
 
   function notifyTyping() {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { updateMyRoomMember } from "@/lib/roomMemberActions";
 import type { RoomSummary } from "@/lib/types";
 import SwipeableRow from "@/components/SwipeableRow";
 import Avatar from "@/components/Avatar";
@@ -60,23 +60,13 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
 
   async function togglePin(roomId: string, pinned: boolean) {
     setRooms((prev) => sortRooms(prev.map((r) => (r.id === roomId ? { ...r, pinned: !pinned } : r))));
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ pinned: !pinned })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId);
+    await updateMyRoomMember(roomId, currentUserId, { pinned: !pinned });
   }
 
   async function deleteTalk(roomId: string) {
     if (!window.confirm("このトークを削除しますか？(自分の画面からのみ削除され、相手には残ります)")) return;
     setRooms((prev) => prev.filter((r) => r.id !== roomId));
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ talk_hidden: true })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId);
+    await updateMyRoomMember(roomId, currentUserId, { talk_hidden: true });
   }
 
   return (

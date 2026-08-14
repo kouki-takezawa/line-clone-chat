@@ -5,6 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { createClient } from "@/lib/supabase/client";
+import { notifyFriendRequest } from "@/lib/push-client";
 import Avatar from "@/components/Avatar";
 import type { FoundProfile } from "@/lib/types";
 
@@ -141,11 +142,7 @@ export default function AddFriendPage() {
       return;
     }
     setSent(true);
-    fetch("/api/push/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "friend_request", toUserId: found.id }),
-    }).catch(() => {});
+    notifyFriendRequest(found.id);
   }
 
   return (

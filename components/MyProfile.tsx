@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import Avatar from "@/components/Avatar";
+import SnsLinks from "@/components/SnsLinks";
 import type { Profile } from "@/lib/types";
 
 export default function MyProfile({ profile }: { profile: Profile }) {
@@ -26,6 +27,7 @@ export default function MyProfile({ profile }: { profile: Profile }) {
         <div className="flex flex-col items-center gap-3">
           <Avatar profile={profile} size="h-24 w-24" />
           <p className="text-xl font-semibold">{profile.display_name}</p>
+          <SnsLinks xHandle={profile.x_handle} instagramHandle={profile.instagram_handle} />
         </div>
 
         <div className="mt-8 flex flex-col items-center gap-2 rounded-xl border border-black/10 p-4 dark:border-white/10">

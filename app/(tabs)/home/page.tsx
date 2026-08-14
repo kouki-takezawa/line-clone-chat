@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import HomeFriendList from "@/components/HomeFriendList";
+import { getMyRoomMemberships } from "@/lib/rooms";
 import type { Profile } from "@/lib/types";
 
 export default async function HomePage() {
@@ -11,29 +12,19 @@ export default async function HomePage() {
   const user = session?.user;
   if (!user) redirect("/login");
 
-  // RLS scopes this to room_members rows for rooms the caller is in, so no
-  // explicit filter is needed.
-  const { data: allMembersRaw } = await supabase
-    .from("room_members")
-    .select("room_id, user_id, friend_removed, profile:profiles(*)");
-  const allMembers = allMembersRaw as unknown as Array<{
-    room_id: string;
-    user_id: string;
-    friend_removed: boolean;
-    profile: Profile | null;
-  }> | null;
+  const rows = await getMyRoomMemberships(supabase);
 
   // A room has exactly one other member (1:1 rooms), so whether *my own*
   // row for that room has friend_removed set is what decides whether the
   // room's other member still shows up in my list — the other member's own
   // row for the same room is irrelevant here.
   const myHiddenRooms = new Set(
-    (allMembers ?? []).filter((r) => r.user_id === user.id && r.friend_removed).map((r) => r.room_id),
+    rows.filter((r) => r.user_id === user.id && r.friend_removed).map((r) => r.room_id),
   );
 
   const friends = new Map<string, { roomId: string; friend: Profile }>();
   let me: Profile | null = null;
-  for (const row of allMembers ?? []) {
+  for (const row of rows) {
     if (row.user_id === user.id && row.profile) {
       me = row.profile;
     } else if (row.profile && !myHiddenRooms.has(row.room_id)) {

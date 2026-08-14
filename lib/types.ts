@@ -5,6 +5,8 @@ export type Profile = {
   avatar_url: string | null;
   friend_code: string;
   show_notification_preview: boolean;
+  x_handle: string | null;
+  instagram_handle: string | null;
   created_at: string;
 };
 

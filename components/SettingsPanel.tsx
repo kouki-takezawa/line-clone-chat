@@ -7,6 +7,7 @@ import { compressImage } from "@/lib/image";
 import { avatarColorFor } from "@/lib/avatarColor";
 import NotificationToggle from "@/components/NotificationToggle";
 import Avatar from "@/components/Avatar";
+import { updateMyRoomMember } from "@/lib/roomMemberActions";
 import type { Profile } from "@/lib/types";
 
 type Props = {
@@ -17,9 +18,22 @@ type Props = {
   avatarUrl: string | null;
   ttlHours: number;
   showNotificationPreview: boolean;
+  xHandle: string | null;
+  instagramHandle: string | null;
   blockedFriends: { blocked_id: string; blocked: Profile }[];
   removedFriends: { roomId: string; friend: Profile }[];
 };
+
+// A leading "@" or a full profile URL are both things people naturally
+// paste into a handle field — normalized down to the bare handle so the
+// stored value is consistent regardless of what was typed in.
+function normalizeHandle(input: string): string {
+  return input
+    .trim()
+    .replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com|instagram\.com)\//i, "")
+    .replace(/\/$/, "")
+    .replace(/^@/, "");
+}
 
 export default function SettingsPanel({
   currentUserId,
@@ -29,6 +43,8 @@ export default function SettingsPanel({
   avatarUrl: initialAvatarUrl,
   ttlHours,
   showNotificationPreview: initialShowPreview,
+  xHandle: initialXHandle,
+  instagramHandle: initialInstagramHandle,
   blockedFriends: initialBlockedFriends,
   removedFriends: initialRemovedFriends,
 }: Props) {
@@ -36,6 +52,8 @@ export default function SettingsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [xHandle, setXHandle] = useState(initialXHandle ?? "");
+  const [instagramHandle, setInstagramHandle] = useState(initialInstagramHandle ?? "");
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -83,15 +101,24 @@ export default function SettingsPanel({
     setProfileSaved(false);
     setError(null);
 
+    const normalizedX = normalizeHandle(xHandle);
+    const normalizedInstagram = normalizeHandle(instagramHandle);
+    setXHandle(normalizedX);
+    setInstagramHandle(normalizedInstagram);
+
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ display_name: displayName.trim() || initialDisplayName })
+      .update({
+        display_name: displayName.trim() || initialDisplayName,
+        x_handle: normalizedX || null,
+        instagram_handle: normalizedInstagram || null,
+      })
       .eq("id", currentUserId);
 
     setSavingProfile(false);
     if (updateError) {
-      setError("表示名の更新に失敗しました");
+      setError("プロフィールの更新に失敗しました");
       return;
     }
     setProfileSaved(true);
@@ -134,12 +161,7 @@ export default function SettingsPanel({
 
   async function restoreFriend(roomId: string, friendId: string) {
     setRemovedFriends((prev) => prev.filter((r) => r.friend.id !== friendId));
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ friend_removed: false })
-      .eq("room_id", roomId)
-      .eq("user_id", currentUserId);
+    await updateMyRoomMember(roomId, currentUserId, { friend_removed: false });
   }
 
   async function handleSignOut() {
@@ -221,6 +243,26 @@ export default function SettingsPanel({
               placeholder="表示名"
               className="w-full rounded-lg border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-neutral-900"
             />
+            <div className="flex items-center gap-2">
+              <span className="w-16 shrink-0 text-sm text-black/50 dark:text-white/50">X</span>
+              <input
+                type="text"
+                value={xHandle}
+                onChange={(e) => setXHandle(e.target.value)}
+                placeholder="ユーザー名（任意）"
+                className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-neutral-900"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-16 shrink-0 text-sm text-black/50 dark:text-white/50">Instagram</span>
+              <input
+                type="text"
+                value={instagramHandle}
+                onChange={(e) => setInstagramHandle(e.target.value)}
+                placeholder="ユーザー名（任意）"
+                className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-neutral-900"
+              />
+            </div>
             <button
               type="submit"
               disabled={savingProfile}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { updateMyRoomMember } from "@/lib/roomMemberActions";
 import Avatar from "@/components/Avatar";
 import SwipeableRow from "@/components/SwipeableRow";
 import type { Profile } from "@/lib/types";
@@ -32,12 +33,7 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
   async function removeFriend(roomId: string, friendId: string) {
     if (!window.confirm("この友達を削除しますか？(自分の一覧からのみ削除されます)")) return;
     setFriends((prev) => prev.filter((f) => f.friend.id !== friendId));
-    const supabase = createClient();
-    await supabase
-      .from("room_members")
-      .update({ friend_removed: true })
-      .eq("room_id", roomId)
-      .eq("user_id", me.id);
+    await updateMyRoomMember(roomId, me.id, { friend_removed: true });
   }
 
   async function blockFriend(roomId: string, friendId: string) {
@@ -46,11 +42,7 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
     const supabase = createClient();
     await Promise.all([
       supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: friendId }),
-      supabase
-        .from("room_members")
-        .update({ friend_removed: true, talk_hidden: true })
-        .eq("room_id", roomId)
-        .eq("user_id", me.id),
+      updateMyRoomMember(roomId, me.id, { friend_removed: true, talk_hidden: true }),
     ]);
   }
 

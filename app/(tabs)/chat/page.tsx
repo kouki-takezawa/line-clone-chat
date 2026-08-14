@@ -1,17 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import FriendList from "@/components/FriendList";
+import { getMyRoomMemberships } from "@/lib/rooms";
 import type { Profile, RoomSummary } from "@/lib/types";
-
-type MemberRow = {
-  room_id: string;
-  user_id: string;
-  pinned: boolean;
-  talk_hidden: boolean;
-  muted: boolean;
-  last_read_at: string;
-  profile: Profile | null;
-};
 
 export default async function ChatListPage() {
   const supabase = await createClient();
@@ -26,22 +17,25 @@ export default async function ChatListPage() {
   if (!user) redirect("/login");
 
   // RLS already restricts room_members/messages to rows the caller can see,
-  // so none of these queries need an explicit room_id filter — that lets
-  // them run in a single parallel round trip.
-  const [{ data: allMembersRaw }, { data: recentMessages }] = await Promise.all([
+  // so neither query needs an explicit room_id filter — that lets them run
+  // in a single parallel round trip. image_width/image_height aren't
+  // selected: the talk list only ever needs "was this a photo" (image_path
+  // alone answers that) for its one-line preview, never the dimensions.
+  const [rows, { data: recentMessages }] = await Promise.all([
+    getMyRoomMemberships(supabase),
     supabase
-      .from("room_members")
-      .select("room_id, user_id, pinned, talk_hidden, muted, last_read_at, profile:profiles(*)"),
-    supabase.from("messages").select("*").order("created_at", { ascending: false }).limit(200),
+      .from("messages")
+      .select("id, room_id, sender_id, body, image_path, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
-  const allMembers = allMembersRaw as unknown as MemberRow[] | null;
 
   const friendByRoom = new Map<string, Profile>();
   const myPrefsByRoom = new Map<
     string,
     { pinned: boolean; talk_hidden: boolean; muted: boolean; last_read_at: string }
   >();
-  for (const row of allMembers ?? []) {
+  for (const row of rows) {
     if (row.user_id === user.id) {
       myPrefsByRoom.set(row.room_id, {
         pinned: row.pinned,
@@ -59,7 +53,9 @@ export default async function ChatListPage() {
   const lastByRoom = new Map<string, RoomSummary["lastMessage"]>();
   const unreadCountByRoom = new Map<string, number>();
   for (const message of recentMessages ?? []) {
-    if (!lastByRoom.has(message.room_id)) lastByRoom.set(message.room_id, message);
+    if (!lastByRoom.has(message.room_id)) {
+      lastByRoom.set(message.room_id, { ...message, image_width: null, image_height: null });
+    }
     const myLastRead = myPrefsByRoom.get(message.room_id)?.last_read_at;
     // Date comparison, not string comparison — see MessageList.tsx for why.
     if (
