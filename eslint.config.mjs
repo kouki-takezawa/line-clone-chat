@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone admin app with its own eslint/tsconfig — not part of this project.
+    "admin/**",
   ]),
 ]);
 
