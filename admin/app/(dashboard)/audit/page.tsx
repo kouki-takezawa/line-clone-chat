@@ -22,6 +22,11 @@ const ACTION_LABELS: Record<string, string> = {
   admin_delete: "管理者削除",
   broadcast_schedule: "配信予約",
   broadcast_cancel: "予約配信キャンセル",
+  restrict_friends: "友達追加を制限",
+  unrestrict_friends: "友達追加の制限を解除",
+  restrict_messaging: "トーク送信を制限",
+  unrestrict_messaging: "トーク送信の制限を解除",
+  view_talk: "トーク内容を閲覧",
 };
 
 function formatDetail(action: string, detail: string): string {

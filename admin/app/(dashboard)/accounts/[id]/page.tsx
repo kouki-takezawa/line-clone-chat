@@ -13,6 +13,8 @@ type ProfileRow = {
   x_handle: string | null;
   instagram_handle: string | null;
   is_system_bot: boolean;
+  friend_requests_restricted: boolean;
+  messaging_restricted: boolean;
 };
 
 function isBanned(bannedUntil: string | null | undefined): boolean {
@@ -49,9 +51,14 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/" className="text-sm text-white/50 underline">
-        ← ダッシュボードへ戻る
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/" className="text-sm text-white/50 underline">
+          ← ダッシュボードへ戻る
+        </Link>
+        <Link href={`/accounts/${id}/talks`} className="text-sm text-white/50 underline">
+          トーク内容を確認 →
+        </Link>
+      </div>
       <h1 className="mb-6 mt-1 text-2xl font-semibold">アカウント詳細</h1>
 
       <div className="space-y-6">
@@ -93,6 +100,8 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
             displayName={profile.display_name || ""}
             banned={banned}
             banReason={banReason}
+            friendRequestsRestricted={profile.friend_requests_restricted}
+            messagingRestricted={profile.messaging_restricted}
           />
       </div>
     </div>

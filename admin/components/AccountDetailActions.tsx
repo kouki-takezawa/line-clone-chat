@@ -17,11 +17,15 @@ export default function AccountDetailActions({
   displayName: initialDisplayName,
   banned,
   banReason,
+  friendRequestsRestricted: initialFriendRestricted,
+  messagingRestricted: initialMessagingRestricted,
 }: {
   userId: string;
   displayName: string;
   banned: boolean;
   banReason: string | null;
+  friendRequestsRestricted: boolean;
+  messagingRestricted: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -30,6 +34,8 @@ export default function AccountDetailActions({
   const [duration, setDuration] = useState("24h");
   const [reason, setReason] = useState(banReason ?? "");
   const [dm, setDm] = useState("");
+  const [friendRestricted, setFriendRestricted] = useState(initialFriendRestricted);
+  const [messagingRestricted, setMessagingRestricted] = useState(initialMessagingRestricted);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function post(url: string, body: unknown) {
@@ -73,6 +79,32 @@ export default function AccountDetailActions({
     setBusy(null);
     toast(ok ? "メッセージを送信しました" : data.error || "送信に失敗しました", ok ? "info" : "error");
     if (ok) setDm("");
+  }
+
+  async function handleToggleFriendRestrict() {
+    const next = !friendRestricted;
+    setBusy("friends");
+    const { ok, data } = await post(`/api/accounts/${userId}/restrict-friends`, { restrict: next });
+    setBusy(null);
+    if (ok) {
+      setFriendRestricted(next);
+      toast(next ? "友達追加を制限しました" : "友達追加の制限を解除しました");
+    } else {
+      toast(data.error || "操作に失敗しました", "error");
+    }
+  }
+
+  async function handleToggleMessagingRestrict() {
+    const next = !messagingRestricted;
+    setBusy("messaging");
+    const { ok, data } = await post(`/api/accounts/${userId}/restrict-messaging`, { restrict: next });
+    setBusy(null);
+    if (ok) {
+      setMessagingRestricted(next);
+      toast(next ? "トーク送信を制限しました" : "トーク送信の制限を解除しました");
+    } else {
+      toast(data.error || "操作に失敗しました", "error");
+    }
   }
 
   async function handleDelete() {
@@ -162,6 +194,40 @@ export default function AccountDetailActions({
             </button>
           </div>
         )}
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-white/10 p-4">
+        <h2 className="text-sm font-medium text-white/70">個別の利用制限(アカウント自体はログイン可能なまま)</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm">友達追加を制限</p>
+            <p className="text-xs text-white/40">友達申請の送信・承認ができなくなります</p>
+          </div>
+          <button
+            onClick={handleToggleFriendRestrict}
+            disabled={busy === "friends"}
+            className={`shrink-0 rounded-full border px-4 py-1.5 text-xs disabled:opacity-50 ${
+              friendRestricted ? "border-red-400/40 bg-red-500/20 text-red-300" : "border-white/20"
+            }`}
+          >
+            {friendRestricted ? "制限中" : "制限する"}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm">トーク送信を制限</p>
+            <p className="text-xs text-white/40">トーク画面は開けますが、メッセージの送信ができなくなります</p>
+          </div>
+          <button
+            onClick={handleToggleMessagingRestrict}
+            disabled={busy === "messaging"}
+            className={`shrink-0 rounded-full border px-4 py-1.5 text-xs disabled:opacity-50 ${
+              messagingRestricted ? "border-red-400/40 bg-red-500/20 text-red-300" : "border-white/20"
+            }`}
+          >
+            {messagingRestricted ? "制限中" : "制限する"}
+          </button>
+        </div>
       </section>
 
       <section className="space-y-2 rounded-xl border border-white/10 p-4">
