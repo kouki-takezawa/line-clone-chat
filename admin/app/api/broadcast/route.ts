@@ -42,6 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  await logAdminAction("broadcast", undefined, message);
+  await logAdminAction("broadcast", undefined, JSON.stringify({ message, count: roomIds.length }));
   return NextResponse.json({ sentCount: roomIds.length });
 }

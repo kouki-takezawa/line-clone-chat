@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import AdminHeader from "@/components/AdminHeader";
 import AccountDetailActions from "@/components/AccountDetailActions";
 
 export const dynamic = "force-dynamic";
@@ -48,11 +48,13 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const banReason = (user.app_metadata as { ban_reason?: string } | null)?.ban_reason ?? null;
 
   return (
-    <main className="min-h-dvh p-6">
-      <div className="mx-auto max-w-2xl">
-        <AdminHeader title="アカウント詳細" back />
+    <div className="mx-auto max-w-2xl">
+      <Link href="/" className="text-sm text-white/50 underline">
+        ← ダッシュボードへ戻る
+      </Link>
+      <h1 className="mb-6 mt-1 text-2xl font-semibold">アカウント詳細</h1>
 
-        <div className="space-y-6">
+      <div className="space-y-6">
           <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-5">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-3xl">
               {profile.avatar_emoji || "🙂"}
@@ -92,8 +94,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
             banned={banned}
             banReason={banReason}
           />
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

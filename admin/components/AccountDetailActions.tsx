@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const DURATION_OPTIONS = [
   { value: "24h", label: "1日" },
@@ -22,12 +24,13 @@ export default function AccountDetailActions({
   banReason: string | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [duration, setDuration] = useState("24h");
   const [reason, setReason] = useState(banReason ?? "");
   const [dm, setDm] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   async function post(url: string, body: unknown) {
     const res = await fetch(url, {
@@ -43,7 +46,7 @@ export default function AccountDetailActions({
     setBusy("rename");
     const { ok, data } = await post(`/api/accounts/${userId}/rename`, { displayName: displayName.trim() });
     setBusy(null);
-    setNotice(ok ? "表示名を変更しました" : data.error || "変更に失敗しました");
+    toast(ok ? "表示名を変更しました" : data.error || "変更に失敗しました", ok ? "info" : "error");
     if (ok) router.refresh();
   }
 
@@ -51,7 +54,7 @@ export default function AccountDetailActions({
     setBusy("restrict");
     const { ok, data } = await post(`/api/accounts/${userId}/restrict`, { duration, reason });
     setBusy(null);
-    setNotice(ok ? "制限しました" : data.error || "操作に失敗しました");
+    toast(ok ? "制限しました" : data.error || "操作に失敗しました", ok ? "info" : "error");
     if (ok) router.refresh();
   }
 
@@ -59,7 +62,7 @@ export default function AccountDetailActions({
     setBusy("unrestrict");
     const { ok, data } = await post(`/api/accounts/${userId}/restrict`, { duration: "none" });
     setBusy(null);
-    setNotice(ok ? "制限を解除しました" : data.error || "操作に失敗しました");
+    toast(ok ? "制限を解除しました" : data.error || "操作に失敗しました", ok ? "info" : "error");
     if (ok) router.refresh();
   }
 
@@ -68,25 +71,29 @@ export default function AccountDetailActions({
     setBusy("message");
     const { ok, data } = await post(`/api/accounts/${userId}/message`, { message: dm.trim() });
     setBusy(null);
-    setNotice(ok ? "メッセージを送信しました" : data.error || "送信に失敗しました");
+    toast(ok ? "メッセージを送信しました" : data.error || "送信に失敗しました", ok ? "info" : "error");
     if (ok) setDm("");
   }
 
   async function handleDelete() {
-    if (!window.confirm(`「${initialDisplayName || userId}」を完全に削除します。元に戻せません。よろしいですか？`)) return;
+    const ok0 = await confirm({
+      title: `「${initialDisplayName || userId}」を完全に削除します`,
+      description: "元に戻せません。よろしいですか？",
+      danger: true,
+    });
+    if (!ok0) return;
     setBusy("delete");
     const { ok, data } = await post(`/api/accounts/${userId}/delete`, { label: initialDisplayName });
     setBusy(null);
     if (ok) {
       router.replace("/");
     } else {
-      setNotice(data.error || "削除に失敗しました");
+      toast(data.error || "削除に失敗しました", "error");
     }
   }
 
   return (
     <div className="space-y-6">
-      {notice && <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">{notice}</p>}
 
       <section className="space-y-2 rounded-xl border border-white/10 p-4">
         <h2 className="text-sm font-medium text-white/70">表示名の変更</h2>

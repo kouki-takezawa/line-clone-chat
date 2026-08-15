@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,12 +17,12 @@ export default function LoginPage() {
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     });
     setLoading(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "パスワードが違います");
+      setError(data.error || "ログインに失敗しました");
       return;
     }
     router.replace("/");
@@ -36,12 +37,22 @@ export default function LoginPage() {
       >
         <h1 className="text-xl font-semibold">管理画面ログイン</h1>
         <input
-          type="password"
+          type="text"
           required
           autoFocus
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="ユーザー名"
+          autoComplete="username"
+          className="w-full rounded-lg border border-white/20 bg-transparent px-3 py-2 outline-none focus:border-white/50"
+        />
+        <input
+          type="password"
+          required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="管理者パスワード"
+          placeholder="パスワード"
+          autoComplete="current-password"
           className="w-full rounded-lg border border-white/20 bg-transparent px-3 py-2 outline-none focus:border-white/50"
         />
         {error && <p className="text-sm text-red-400">{error}</p>}
