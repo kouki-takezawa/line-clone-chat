@@ -7,6 +7,7 @@ export type Profile = {
   show_notification_preview: boolean;
   x_handle: string | null;
   instagram_handle: string | null;
+  is_system_bot: boolean;
   created_at: string;
 };
 

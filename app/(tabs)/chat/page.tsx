@@ -78,6 +78,7 @@ export default async function ChatListPage() {
       unreadCount: unreadCountByRoom.get(roomId) ?? 0,
     }))
     .sort((a, b) => {
+      if (a.friend.is_system_bot !== b.friend.is_system_bot) return a.friend.is_system_bot ? -1 : 1;
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       const at = a.lastMessage?.created_at ?? "";
       const bt = b.lastMessage?.created_at ?? "";

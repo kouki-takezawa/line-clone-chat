@@ -35,6 +35,7 @@ function lastMessageLabel(message: RoomSummary["lastMessage"]) {
 
 function sortRooms(rooms: RoomSummary[]) {
   return [...rooms].sort((a, b) => {
+    if (a.friend.is_system_bot !== b.friend.is_system_bot) return a.friend.is_system_bot ? -1 : 1;
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     const at = a.lastMessage?.created_at ?? "";
     const bt = b.lastMessage?.created_at ?? "";
@@ -82,47 +83,67 @@ export default function FriendList({ rooms: initialRooms, currentUserId }: Props
         </p>
       ) : (
         <ul className="min-h-0 flex-1 divide-y divide-black/5 overflow-y-auto pb-20 dark:divide-white/10">
-          {rooms.map((room) => (
-            <li key={room.id}>
-              <SwipeableRow
-                onTap={() => router.push(`/chat/${room.id}`)}
-                actions={[
-                  {
-                    label: room.pinned ? "ピン解除" : "ピン止め",
-                    onClick: () => togglePin(room.id, room.pinned),
-                    className: "bg-amber-500",
-                  },
-                  {
-                    label: "削除",
-                    onClick: () => deleteTalk(room.id),
-                    className: "bg-red-500",
-                  },
-                ]}
-              >
-                <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
-                  <Avatar profile={room.friend} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1">
-                      {room.pinned && <span className="text-xs">📌</span>}
-                      {room.muted && <span className="text-xs">🔕</span>}
-                      <span className="flex-1 truncate font-medium">{room.friend.display_name}</span>
-                      <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
-                        {room.lastMessage ? formatListTime(room.lastMessage.created_at) : ""}
-                      </span>
-                    </span>
-                    <span className="block truncate text-sm text-black/50 dark:text-white/50">
-                      {lastMessageLabel(room.lastMessage)}
+          {rooms.map((room) => {
+            const rowContent = (
+              <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
+                <Avatar profile={room.friend} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-1">
+                    {(room.friend.is_system_bot || room.pinned) && <span className="text-xs">📌</span>}
+                    {room.muted && <span className="text-xs">🔕</span>}
+                    <span className="flex-1 truncate font-medium">{room.friend.display_name}</span>
+                    <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
+                      {room.lastMessage ? formatListTime(room.lastMessage.created_at) : ""}
                     </span>
                   </span>
-                  {room.unreadCount > 0 && (
-                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#06C755] px-1.5 text-xs font-medium text-white">
-                      {room.unreadCount > 99 ? "99+" : room.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </SwipeableRow>
-            </li>
-          ))}
+                  <span className="block truncate text-sm text-black/50 dark:text-white/50">
+                    {lastMessageLabel(room.lastMessage)}
+                  </span>
+                </span>
+                {room.unreadCount > 0 && (
+                  <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#06C755] px-1.5 text-xs font-medium text-white">
+                    {room.unreadCount > 99 ? "99+" : room.unreadCount}
+                  </span>
+                )}
+              </div>
+            );
+
+            // The announcements bot's talk can't be pinned/unpinned or
+            // deleted — it's always kept at the top — so it skips the
+            // swipe-action affordance entirely rather than offering
+            // actions that are silently rejected server-side.
+            if (room.friend.is_system_bot) {
+              return (
+                <li key={room.id}>
+                  <button type="button" onClick={() => router.push(`/chat/${room.id}`)} className="block w-full">
+                    {rowContent}
+                  </button>
+                </li>
+              );
+            }
+
+            return (
+              <li key={room.id}>
+                <SwipeableRow
+                  onTap={() => router.push(`/chat/${room.id}`)}
+                  actions={[
+                    {
+                      label: room.pinned ? "ピン解除" : "ピン止め",
+                      onClick: () => togglePin(room.id, room.pinned),
+                      className: "bg-amber-500",
+                    },
+                    {
+                      label: "削除",
+                      onClick: () => deleteTalk(room.id),
+                      className: "bg-red-500",
+                    },
+                  ]}
+                >
+                  {rowContent}
+                </SwipeableRow>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

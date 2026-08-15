@@ -77,21 +77,25 @@ export default function FriendProfile({ friend, roomId, currentUserId }: Props) 
               トークを開く
             </Link>
           )}
-          <button
-            type="button"
-            onClick={removeFriend}
-            className="w-full rounded-full border border-black/15 px-4 py-2 text-sm dark:border-white/20"
-          >
-            友達を削除
-          </button>
-          <button
-            type="button"
-            onClick={toggleBlock}
-            disabled={blocked === null}
-            className="w-full rounded-full border border-red-200 px-4 py-2 text-sm text-red-600 disabled:opacity-50 dark:border-red-900"
-          >
-            {blocked ? "ブロックを解除" : "ブロックする"}
-          </button>
+          {!friend.is_system_bot && (
+            <>
+              <button
+                type="button"
+                onClick={removeFriend}
+                className="w-full rounded-full border border-black/15 px-4 py-2 text-sm dark:border-white/20"
+              >
+                友達を削除
+              </button>
+              <button
+                type="button"
+                onClick={toggleBlock}
+                disabled={blocked === null}
+                className="w-full rounded-full border border-red-200 px-4 py-2 text-sm text-red-600 disabled:opacity-50 dark:border-red-900"
+              >
+                {blocked ? "ブロックを解除" : "ブロックする"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

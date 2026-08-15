@@ -107,30 +107,48 @@ export default function HomeFriendList({ me, friends: initialFriends, pendingReq
           </p>
         ) : (
           <ul className="divide-y divide-black/5 dark:divide-white/10">
-            {visibleFriends.map(({ roomId, friend }) => (
-              <li key={friend.id}>
-                <SwipeableRow
-                  onTap={() => router.push(`/home/friend/${friend.id}`)}
-                  actions={[
-                    {
-                      label: "削除",
-                      onClick: () => removeFriend(roomId, friend.id),
-                      className: "bg-neutral-500",
-                    },
-                    {
-                      label: "ブロック",
-                      onClick: () => blockFriend(roomId, friend.id),
-                      className: "bg-red-500",
-                    },
-                  ]}
-                >
-                  <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
-                    <Avatar profile={friend} />
-                    <span className="font-medium">{friend.display_name}</span>
-                  </div>
-                </SwipeableRow>
-              </li>
-            ))}
+            {visibleFriends.map(({ roomId, friend }) => {
+              const rowContent = (
+                <div className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/10">
+                  <Avatar profile={friend} />
+                  <span className="font-medium">{friend.display_name}</span>
+                </div>
+              );
+
+              // The announcements bot can't be removed or blocked, so it
+              // gets no swipe actions at all.
+              if (friend.is_system_bot) {
+                return (
+                  <li key={friend.id}>
+                    <button type="button" onClick={() => router.push(`/home/friend/${friend.id}`)} className="block w-full">
+                      {rowContent}
+                    </button>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={friend.id}>
+                  <SwipeableRow
+                    onTap={() => router.push(`/home/friend/${friend.id}`)}
+                    actions={[
+                      {
+                        label: "削除",
+                        onClick: () => removeFriend(roomId, friend.id),
+                        className: "bg-neutral-500",
+                      },
+                      {
+                        label: "ブロック",
+                        onClick: () => blockFriend(roomId, friend.id),
+                        className: "bg-red-500",
+                      },
+                    ]}
+                  >
+                    {rowContent}
+                  </SwipeableRow>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
