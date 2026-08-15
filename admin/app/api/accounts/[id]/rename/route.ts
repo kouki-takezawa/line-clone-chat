@@ -5,12 +5,15 @@ import { logAdminAction } from "@/lib/auditLog";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => null);
-  const label = typeof body?.label === "string" ? body.label.slice(0, 100) : undefined;
+  const displayName = typeof body?.displayName === "string" ? body.displayName.trim().slice(0, 50) : "";
+  if (!displayName) {
+    return NextResponse.json({ error: "表示名を入力してください" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.deleteUser(id);
+  const { error } = await admin.from("profiles").update({ display_name: displayName }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await logAdminAction("delete", id, label);
+  await logAdminAction("rename", id, displayName);
   return NextResponse.json({ ok: true });
 }

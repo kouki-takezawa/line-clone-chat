@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import AdminHeader from "@/components/AdminHeader";
 
 export default function BroadcastPage() {
   const [message, setMessage] = useState("");
@@ -33,30 +33,29 @@ export default function BroadcastPage() {
 
   return (
     <main className="min-h-dvh p-6">
-      <div className="mx-auto max-w-xl space-y-4">
-        <Link href="/" className="text-sm text-white/50 underline">
-          ← 戻る
-        </Link>
-        <h1 className="text-2xl font-semibold">全体配信</h1>
-        <p className="text-sm text-white/50">
-          全アカウントのトーク画面に「運営からのお知らせ」として一斉配信します。通常のメッセージと同じく24時間で自動削除されます。
-        </p>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={6}
-          maxLength={1000}
-          placeholder="配信内容を入力"
-          className="w-full rounded-lg border border-white/20 bg-transparent px-3 py-2 outline-none focus:border-white/50"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !message.trim()}
-          className="rounded-full bg-white px-4 py-2 font-medium text-black disabled:opacity-50"
-        >
-          {sending ? "配信中..." : "配信する"}
-        </button>
-        {result && <p className="text-sm text-white/70">{result}</p>}
+      <div className="mx-auto max-w-xl">
+        <AdminHeader title="全体配信" back />
+        <div className="space-y-4">
+          <p className="text-sm text-white/50">
+            全アカウントのトーク画面に「運営からのお知らせ」として一斉配信します。通常のメッセージと同じく24時間で自動削除されます。
+          </p>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={6}
+            maxLength={1000}
+            placeholder="配信内容を入力"
+            className="w-full rounded-lg border border-white/20 bg-transparent px-3 py-2 outline-none focus:border-white/50"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !message.trim()}
+            className="rounded-full bg-white px-4 py-2 font-medium text-black disabled:opacity-50"
+          >
+            {sending ? "配信中..." : "配信する"}
+          </button>
+          {result && <p className="text-sm text-white/70">{result}</p>}
+        </div>
       </div>
     </main>
   );

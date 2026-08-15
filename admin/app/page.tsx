@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import AccountList, { type Account } from "@/components/AccountList";
-import LogoutButton from "@/components/LogoutButton";
+import AdminHeader from "@/components/AdminHeader";
 
 export const dynamic = "force-dynamic";
+
+const REGISTRATION_CAP = 110;
 
 type ProfileRow = {
   id: string;
@@ -33,19 +34,41 @@ export default async function DashboardPage() {
     }))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  const now = Date.now();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const registeredToday = accounts.filter((a) => new Date(a.createdAt).getTime() >= todayStart.getTime()).length;
+  const restrictedCount = accounts.filter((a) => a.bannedUntil && new Date(a.bannedUntil).getTime() > now).length;
+  const capPct = Math.min(100, Math.round((accounts.length / REGISTRATION_CAP) * 100));
+
   return (
     <main className="min-h-dvh p-6">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">管理画面</h1>
-          <div className="flex gap-3">
-            <Link href="/broadcast" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
-              全体配信
-            </Link>
-            <LogoutButton />
+      <div className="mx-auto max-w-3xl">
+        <AdminHeader title="管理画面" />
+
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-white/10 p-4">
+            <p className="text-xs text-white/40">総登録数</p>
+            <p className="mt-1 text-2xl font-semibold">{accounts.length}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full bg-white" style={{ width: `${capPct}%` }} />
+            </div>
+            <p className="mt-1 text-xs text-white/30">上限 {REGISTRATION_CAP}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 p-4">
+            <p className="text-xs text-white/40">本日の新規登録</p>
+            <p className="mt-1 text-2xl font-semibold">{registeredToday}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 p-4">
+            <p className="text-xs text-white/40">制限中</p>
+            <p className="mt-1 text-2xl font-semibold">{restrictedCount}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 p-4">
+            <p className="text-xs text-white/40">残り登録枠</p>
+            <p className="mt-1 text-2xl font-semibold">{Math.max(0, REGISTRATION_CAP - accounts.length)}</p>
           </div>
         </div>
-        <p className="text-sm text-white/50">登録アカウント数: {accounts.length} / 110</p>
+
         <AccountList accounts={accounts} />
       </div>
     </main>

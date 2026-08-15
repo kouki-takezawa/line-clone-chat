@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { logAdminAction } from "@/lib/auditLog";
 
 export const dynamic = "force-dynamic";
 
@@ -41,5 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
+  await logAdminAction("broadcast", undefined, message);
   return NextResponse.json({ sentCount: roomIds.length });
 }

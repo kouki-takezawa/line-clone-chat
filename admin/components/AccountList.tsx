@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 
 export type Account = {
   id: string;
@@ -19,11 +20,24 @@ function isBanned(a: Account): boolean {
 export default function AccountList({ accounts: initial }: { accounts: Account[] }) {
   const [accounts, setAccounts] = useState(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return accounts;
+    return accounts.filter(
+      (a) => a.displayName.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || a.friendCode.toLowerCase().includes(q),
+    );
+  }, [accounts, query]);
 
   async function handleDelete(id: string, label: string) {
     if (!window.confirm(`「${label}」を完全に削除します。元に戻せません。よろしいですか？`)) return;
     setBusyId(id);
-    const res = await fetch(`/api/accounts/${id}/delete`, { method: "POST" });
+    const res = await fetch(`/api/accounts/${id}/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
     setBusyId(null);
     if (res.ok) {
       setAccounts((prev) => prev.filter((a) => a.id !== id));
@@ -37,7 +51,7 @@ export default function AccountList({ accounts: initial }: { accounts: Account[]
     const res = await fetch(`/api/accounts/${id}/restrict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ restrict: !currentlyBanned }),
+      body: JSON.stringify({ duration: currentlyBanned ? "none" : "876000h" }),
     });
     setBusyId(null);
     if (res.ok) {
@@ -53,41 +67,50 @@ export default function AccountList({ accounts: initial }: { accounts: Account[]
     }
   }
 
-  if (accounts.length === 0) {
-    return <p className="text-sm text-white/50">アカウントがありません</p>;
-  }
-
   return (
-    <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10">
-      {accounts.map((a) => {
-        const banned = isBanned(a);
-        return (
-          <li key={a.id} className="flex items-center gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{a.displayName || "(表示名なし)"}</p>
-              <p className="truncate text-xs text-white/50">{a.email}</p>
-              <p className="text-xs text-white/30">
-                登録: {new Date(a.createdAt).toLocaleDateString("ja-JP")} ・ ID: {a.friendCode}
-                {banned && <span className="ml-2 text-red-400">制限中</span>}
-              </p>
-            </div>
-            <button
-              onClick={() => handleToggleRestrict(a.id, banned)}
-              disabled={busyId === a.id}
-              className="shrink-0 rounded-full border border-white/20 px-3 py-1.5 text-xs disabled:opacity-50"
-            >
-              {banned ? "制限解除" : "制限する"}
-            </button>
-            <button
-              onClick={() => handleDelete(a.id, a.displayName || a.email)}
-              disabled={busyId === a.id}
-              className="shrink-0 rounded-full border border-red-400/40 px-3 py-1.5 text-xs text-red-400 disabled:opacity-50"
-            >
-              削除
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="space-y-3">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="表示名・メール・友達コードで検索"
+        className="w-full rounded-lg border border-white/20 bg-transparent px-3 py-2 text-sm outline-none focus:border-white/50"
+      />
+
+      {filtered.length === 0 ? (
+        <p className="text-sm text-white/50">該当するアカウントがありません</p>
+      ) : (
+        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10">
+          {filtered.map((a) => {
+            const banned = isBanned(a);
+            return (
+              <li key={a.id} className="flex items-center gap-3 p-4">
+                <Link href={`/accounts/${a.id}`} className="min-w-0 flex-1">
+                  <p className="truncate font-medium hover:underline">{a.displayName || "(表示名なし)"}</p>
+                  <p className="truncate text-xs text-white/50">{a.email}</p>
+                  <p className="text-xs text-white/30">
+                    登録: {new Date(a.createdAt).toLocaleDateString("ja-JP")} ・ ID: {a.friendCode}
+                    {banned && <span className="ml-2 text-red-400">制限中</span>}
+                  </p>
+                </Link>
+                <button
+                  onClick={() => handleToggleRestrict(a.id, banned)}
+                  disabled={busyId === a.id}
+                  className="shrink-0 rounded-full border border-white/20 px-3 py-1.5 text-xs disabled:opacity-50"
+                >
+                  {banned ? "制限解除" : "制限する"}
+                </button>
+                <button
+                  onClick={() => handleDelete(a.id, a.displayName || a.email)}
+                  disabled={busyId === a.id}
+                  className="shrink-0 rounded-full border border-red-400/40 px-3 py-1.5 text-xs text-red-400 disabled:opacity-50"
+                >
+                  削除
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
