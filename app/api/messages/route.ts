@@ -1,26 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  sendMessage,
+  type SendMessageBody,
+  type MessageInsertClient,
+  type TalkUnhideClient,
+} from "@/app/api/messages/sendMessage";
 
-type SendMessageBody = {
-  id: string;
-  roomId: string;
-  body?: string | null;
-  imagePath?: string | null;
-  imageWidth?: number | null;
-  imageHeight?: number | null;
-};
-
-// Sends a message, then un-hides the talk for anyone who had it hidden via
-// トーク削除 — this used to be a DB trigger (0026_reinstate_unhide_on_new_message.sql,
-// dropped in 0027) but lives here instead so the "new message un-hides the
-// talk" rule is app code, not a Postgres trigger.
-//
-// The insert itself runs through the request's own cookie-scoped client, so
-// every existing RLS check (room membership, blocked-pair) still applies
-// exactly as before. Only the follow-up talk_hidden reset needs the admin
-// client, since a sender is only allowed to update their own room_members
-// row under RLS but this must clear it for every member of the room.
+// Thin Next.js wiring around sendMessage() (see sendMessage.ts for the
+// actual logic and why it needs both a request-scoped and an admin client).
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -30,26 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { id, roomId, body, imagePath, imageWidth, imageHeight } = (await req.json()) as SendMessageBody;
-  if (!id || !roomId || (!body && !imagePath)) {
-    return NextResponse.json({ error: "invalid request" }, { status: 400 });
-  }
-
-  const { error: insertError } = await supabase.from("messages").insert({
-    id,
-    room_id: roomId,
-    sender_id: user.id,
-    body: body ?? null,
-    image_path: imagePath ?? null,
-    image_width: imageWidth ?? null,
-    image_height: imageHeight ?? null,
-  });
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 400 });
-  }
-
+  const payload = (await req.json()) as SendMessageBody;
   const admin = createAdminClient();
-  await admin.from("room_members").update({ talk_hidden: false }).eq("room_id", roomId).eq("talk_hidden", true);
-
-  return NextResponse.json({ ok: true });
+  // Cast through unknown: the real Supabase client structurally satisfies
+  // these narrow interfaces (that's what makes them useful for testing),
+  // but its full generic type is too deep for tsc to verify that directly
+  // (TS2589 "excessively deep") — this boundary cast is the fix, not a
+  // type-safety hole, since sendMessage()'s own signature still constrains
+  // exactly which calls it can make through these clients.
+  const result = await sendMessage(
+    supabase as unknown as MessageInsertClient,
+    admin as unknown as TalkUnhideClient,
+    user.id,
+    payload,
+  );
+  return NextResponse.json(result.body, { status: result.status });
 }
