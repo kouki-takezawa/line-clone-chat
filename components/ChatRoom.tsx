@@ -46,6 +46,29 @@ function describeError(error: { message: string }, fallback: string): string {
   return fallback;
 }
 
+// Routes the actual insert through /api/messages instead of calling
+// supabase.from("messages").insert() directly — that route also clears
+// talk_hidden for the room (un-hiding a トーク削除'd talk on new activity),
+// which a plain client-side insert can't do: RLS only lets a member update
+// their own room_members row, never the other participant's.
+async function postMessage(payload: {
+  id: string;
+  roomId: string;
+  body?: string | null;
+  imagePath?: string | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
+}): Promise<{ message: string } | null> {
+  const res = await fetch("/api/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return { message: (data && data.error) || "送信に失敗しました" };
+}
+
 export default function ChatRoom({
   roomId,
   currentUserId,
@@ -92,9 +115,9 @@ export default function ChatRoom({
   }, [messages]);
 
   // Note: opening a talk does NOT un-hide it from the トーク list anymore —
-  // only a new message (sent or received) does, via a DB trigger
-  // (0010_unhide_on_new_message.sql). Otherwise "delete" would be undone
-  // just by looking at the conversation from 友達一覧.
+  // only a new message (sent or received) does, via /api/messages clearing
+  // talk_hidden after insert (see postMessage() above). Otherwise "delete"
+  // would be undone just by looking at the conversation from 友達一覧.
 
   useEffect(() => {
     const supabase = createClient();
@@ -260,10 +283,7 @@ export default function ChatRoom({
         },
       ]);
 
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("messages")
-        .insert({ id: clientId, room_id: roomId, sender_id: currentUserId, body: text });
+      const error = await postMessage({ id: clientId, roomId, body: text });
 
       if (error) {
         const errorMessage = describeError(error, "送信に失敗しました");
@@ -308,19 +328,20 @@ export default function ChatRoom({
           .upload(path, file, { contentType: "image/jpeg" });
         if (uploadError) throw uploadError;
 
-        const { error: insertError } = await supabase.from("messages").insert({
+        const error = await postMessage({
           id: clientId,
-          room_id: roomId,
-          sender_id: currentUserId,
-          image_path: path,
-          image_width: width,
-          image_height: height,
+          roomId,
+          imagePath: path,
+          imageWidth: width,
+          imageHeight: height,
         });
-        if (insertError) throw insertError;
+        if (error) throw error;
         notifyMessage(roomId, "画像を送信しました");
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? describeError(err, "画像の送信に失敗しました") : "画像の送信に失敗しました";
+          err && typeof err === "object" && "message" in err
+            ? describeError(err as { message: string }, "画像の送信に失敗しました")
+            : "画像の送信に失敗しました";
         setMessages((prev) =>
           prev.map((m) => (m.id === clientId ? { ...m, status: "failed", errorMessage } : m)),
         );
@@ -331,7 +352,6 @@ export default function ChatRoom({
 
   async function retry(message: PendingMessage) {
     setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, status: "pending" } : m)));
-    const supabase = createClient();
 
     if (message.image_path && message.image_path.startsWith("blob:")) {
       // Original File object isn't retained across a failed image send in
@@ -346,9 +366,7 @@ export default function ChatRoom({
       return;
     }
 
-    const { error } = await supabase
-      .from("messages")
-      .insert({ id: message.id, room_id: roomId, sender_id: currentUserId, body: message.body });
+    const error = await postMessage({ id: message.id, roomId, body: message.body });
     if (error) {
       const errorMessage = describeError(error, "送信に失敗しました");
       setMessages((prev) =>
